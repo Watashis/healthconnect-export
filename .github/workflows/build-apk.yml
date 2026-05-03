@@ -22,14 +22,39 @@ jobs:
       with:
         gradle-version: 8.5
 
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        cmdline-tools-version: 11076708
+
+    - name: Create local.properties
+      run: |
+        echo "sdk.dir=${ANDROID_HOME}" > local.properties
+        cat local.properties
+
     - name: Build Debug APK
-      run: gradle assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace --info | tee build.log
       continue-on-error: true
 
-    - name: Upload APK
+    - name: Find APK files
+      run: |
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+        find . -name "app-debug.apk" -type f 2>/dev/null || echo "No debug APK"
+        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug dir"
+
+    - name: Upload Build Log
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: debug-apk
-        path: app/build/outputs/apk/debug/*.apk
+        name: build-log
+        path: build.log
+        retention-days: 7
+
+    - name: Upload All APKs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: all-apks
+        path: |
+          **/*.apk
         retention-days: 30
