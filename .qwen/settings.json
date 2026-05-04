@@ -30,7 +30,12 @@
       "Bash(true)",
       "Bash(git log *)",
       "Bash(git commit *)",
-      "Bash(./build *)"
+      "Bash(./build *)",
+      "Bash(strings)",
+      "Bash(update-java-alternatives *)",
+      "mcp__git__git_status",
+      "mcp__git__git_diff_unstaged",
+      "mcp__git__git_log"
     ]
   },
   "$version": 3

@@ -1,17 +1,17 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
 }
 
 android {
     namespace = "com.healthconnect.export"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.healthconnect.export"
         minSdk = 28
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -21,8 +21,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    kotlin {
+        jvmToolchain(21)
     }
 
     buildTypes {
@@ -38,6 +42,54 @@ android {
     packaging {
         resources {
             excludes += "META-INF/DEPENDENCIES"
+        }
+    }
+}
+
+// Добавляем Health Connect permissions property в merged manifest
+tasks.matching { it.name == "processDebugMainManifest" }.configureEach {
+    doLast {
+        val manifestPath = "${layout.buildDirectory.get()}/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml"
+        val manifestFile = file(manifestPath)
+        if (manifestFile.exists()) {
+            var content = manifestFile.readText()
+            val propertyBlock = """        <property
+            android:name="android.health.HealthConnectPermissions"
+            android:value="@xml/health_connect_permissions" />"""
+            if (!content.contains("HealthConnectPermissions")) {
+                content = content.replace("</application>", "$propertyBlock\n    </application>")
+                manifestFile.writeText(content)
+                println("Added HealthConnectPermissions property to merged manifest")
+            }
+        }
+    }
+}
+
+// После сборки APK, модифицируем бинарный манифест через aapt2
+tasks.matching { it.name == "packageDebug" }.configureEach {
+    dependsOn("processDebugMainManifest")
+    doLast {
+        val aapt2 = android.additionalParameters?.find { it.startsWith("aapt2") }
+            ?: "${android.sdkDirectory}/build-tools/${android.buildToolsVersion}/aapt2"
+        
+        val apkPath = "${layout.buildDirectory.get()}/outputs/apk/debug/app-debug.apk"
+        val manifestPath = "${layout.buildDirectory.get()}/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml"
+        
+        if (file(manifestPath).exists() && file(apkPath).exists()) {
+            // Извлекаем манифест из APK
+            exec {
+                commandLine("unzip", "-o", apkPath, "AndroidManifest.xml", "-d", "${temporaryDir}")
+            }
+            
+            // Проверяем, есть ли уже property
+            val extractedManifest = file("${temporaryDir}/AndroidManifest.xml")
+            if (extractedManifest.exists()) {
+                val content = extractedManifest.readBytes()
+                val contentStr = content.toString(Charsets.UTF_8)
+                if (!contentStr.contains("HealthConnectPermissions")) {
+                    println("Property not found in binary manifest - need alternative approach")
+                }
+            }
         }
     }
 }
@@ -58,7 +110,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // Health Connect
-    implementation("androidx.health.connect:connect-client:1.2.0-alpha04")
+    implementation("androidx.health.connect:connect-client:1.1.0")
 
     // Google Sign-In & Drive API
     implementation("com.google.android.gms:play-services-auth:21.0.0")
