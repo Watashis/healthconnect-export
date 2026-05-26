@@ -23,7 +23,8 @@ User selects health data types and a date range, then exports to JSON files (one
 | Background | WorkManager (`work-runtime-ktx:2.9.0`) |
 | Serialization | `kotlinx-serialization-json:1.6.2` |
 | Testing | JUnit 4.13.2 + Mockito 5.11.0 |
-| Coverage | JaCoCo 0.8.11 |
+| Linting | ktlint 12.1.0 |
+| Coverage | JaCoCo 0.8.11 (XML + HTML + CSV) |
 | CI | GitHub Actions |
 | minSdk / targetSdk / compileSdk | 28 / 36 / 36 |
 | JVM | 21 |
@@ -59,6 +60,8 @@ healthconnect-export/
 │       │   │   ├── LocalExportRepository.kt
 │       │   │   ├── GoogleDriveRepository.kt
 │       │   │   └── WebhookRepository.kt
+│       │   ├── util/
+│       │   │   └── LocaleManager.kt
 │       │   ├── viewmodel/
 │       │   │   └── ExportViewModel.kt
 │       │   ├── ui/
@@ -72,13 +75,19 @@ healthconnect-export/
 │       │   ├── values/themes.xml
 │       │   └── xml/health_connect_permissions.xml
 │       └── test/java/com/healthconnect/export/
-│           ├── data/HumanReadableMapperTest.kt
-│           └── repository/WebhookRepositoryTest.kt
-├── build                          # Build script (bash)
+│           ├── data/
+│           │   ├── HumanReadableMapperTest.kt
+│           │   └── DataModelsSerializationTest.kt
+│           ├── repository/
+│           │   └── WebhookRepositoryTest.kt
+│           └── worker/
+│               └── DailyExportWorkerTest.kt
+├── badges/                          # Coverage badge SVGs (auto-committed by CI)
+├── build                            # Build script (bash)
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── gradle.properties
-├── AGENTS.md                      # This file
+├── AGENTS.md                        # This file
 └── README.md
 ```
 
@@ -124,12 +133,14 @@ UI → ViewModel → HealthConnectRepository (read records)
 
 ## Unit tests
 
-**Test files:**
+**Test files (96 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
-| `HumanReadableMapperTest.kt` | 1 | JSON serialization with human-readable constants |
-| `WebhookRepositoryTest.kt` | 13 | `isValidWebhookUrl()` URL validation |
+| `HumanReadableMapperTest.kt` | 33 | 8 mapper functions: bodyPositionToString (3), specimenSourceToString (3), mealTypeToString (3), sleepStageToString (3), measurementLocationToString (3), menstruationFlowToString (3), nutritionMealTypeToString (3), exerciseTypeToString (6) + null/unknown/edge cases |
+| `WebhookRepositoryTest.kt` | 13 | `isValidWebhookUrl()` — URL validation (valid, invalid, null, edge cases) |
+| `DailyExportWorkerTest.kt` | 14 | `doWork()` (10): success, already exported, empty, exceptions, default config / `schedule()` (4): daily, weekly, manual, cancel |
+| `DataModelsSerializationTest.kt` | 36 | Roundtrip serialization: DailyHealthRecord (5), ExportConfig (4), ExportFrequency (4), HealthDataType (2), ExportSummary (3), helper functions (3), edge cases (4), SpeedData (5), SerialName verification |
 
 **Run tests:**
 
@@ -142,7 +153,39 @@ UI → ViewModel → HealthConnectRepository (read records)
 ```bash
 ./gradlew jacocoTestReport
 # Report: app/build/reports/jacoco/jacocoTestReport/html/index.html
+
+# Coverage gate (verification against thresholds):
+./gradlew jacocoTestCoverageVerification
 ```
+
+---
+
+## Coverage gate (JaCoCo)
+
+### Global rules
+
+| Counter | Minimum | Current |
+|---|---|---|
+| LINE | ≥ 30% | ~32% |
+| BRANCH | ≥ 12% | ~13% |
+| INSTRUCTION | ≥ 15% | ~22% |
+| CLASS | ≥ 45% | ~59% |
+
+### Per-package rules
+
+| Package | Counter | Minimum | Current |
+|---|---|---|---|
+| `com.healthconnect.export.worker.*` | LINE | ≥ 90% | ~97% |
+| `com.healthconnect.export.data.*` | LINE | ≥ 70% | ~75% |
+| `com.healthconnect.export.viewmodel.*` | LINE | ≥ 60% | ~64% |
+| `com.healthconnect.export.util.*` | LINE | ≥ 15% | ~16% |
+| `com.healthconnect.export.repository.*` | LINE | ≥ 10% | ~13% |
+
+If coverage drops below any threshold, `jacocoTestCoverageVerification` fails with a `BUILD FAILED` error listing the violated rules. In CI, this makes the `coverage` job fail (blocking gate).
+
+### Coverage badge
+
+On push to `main`, `cicirello/jacoco-badge-generator` reads `jacocoTestReport.csv` and commits updated coverage/branches badges to `badges/`. The badges are displayed in `README.md`.
 
 ---
 
@@ -157,26 +200,50 @@ Workflow: `.github/workflows/build-apk.yml`
 - **Push tag** `v*` (e.g., `v1.1`)
 - **Manual** via `workflow_dispatch`
 
-### Build steps
+### Pipeline
+
+```
+Push
+ ├─ lint       — lintRelease + ktlintCheck (continue-on-error)
+ ├─ test       — testDebugUnitTest → upload test-results artifact
+ ├─ coverage   — jacocoTestReport + jacocoTestCoverageVerification
+ │                → on push to main: generate + commit coverage badge
+ │                → upload coverage-html (7d) + coverage-xml (30d)
+ └─ build-debug — assembleDebug → upload debug APK (7d)
+
+Tag push (after lint + test + build-debug):
+ └─ build-release
+     ├─ bump versionName from tag, increment versionCode
+     ├─ commit + push version bump to main
+     ├─ decode keystore from KEYSTORE_BASE64 secret
+     ├─ assembleRelease (signed)
+     └─ upload release APK (30d)
+
+Tag push (after build-release):
+ └─ release
+     ├─ download release APK
+     ├─ generate changelog from git log
+     └─ create GitHub Release with APK
+```
+
+### Build steps (detailed)
 
 1. **Checkout** + JDK 21 + Android SDK
-2. **Cache** Gradle
-3. **Bump version** (tag push only): updates `versionName` from tag, increments `versionCode`
-4. **Commit version bump** to `main`
-5. **Lint** (`lintRelease`)
-6. **Unit tests** (`testDebugUnitTest`)
-7. **JaCoCo coverage** (`jacocoTestReport`) → HTML/XML artifacts
-8. **Debug APK** (`assembleDebug`)
-9. **Decode keystore** from `KEYSTORE_BASE64` secret (tag push only)
-10. **Release APK** (`assembleRelease`) with signing
-11. **Rename APKs**: versioned names
-12. **Upload artifacts**: Debug (7 days), Release (30 days)
-
-### Release job (tag push)
-
-- Downloads signed release APK
-- Generates changelog from git history
-- Creates GitHub Release with APK file
+2. **Cache** Gradle (~/.gradle/caches, ~/.gradle/wrapper)
+3. **Lint** (`lintRelease`)
+4. **Ktlint** (`ktlintCheck`) — non-blocking (`continue-on-error: true`)
+5. **Unit tests** (`testDebugUnitTest`) → upload `test-results` (7 days)
+6. **JaCoCo coverage** (`jacocoTestReport`) + **verification** (`jacocoTestCoverageVerification`) in one Gradle invocation
+7. **Generate coverage badge** (push to main only) — `cicirello/jacoco-badge-generator`
+8. **Upload coverage** HTML (7 days) + XML (30 days)
+9. **Debug APK** (`assembleDebug`) → upload (7 days)
+10. **Version bump** (tag push only): `versionName` ← tag, `versionCode` ← +1
+11. **Commit** version bump to `main`
+12. **Decode keystore** from `KEYSTORE_BASE64` secret
+13. **Release APK** (`assembleRelease`) with signing
+14. **Rename APKs**: `HealthConnectExport-{version}.apk` and `-unsigned.apk`
+15. **Upload** release APK (30 days)
+16. **GitHub Release** (tag push only): changelog from git history + APK attachment
 
 ### GitHub Secrets
 
@@ -202,50 +269,6 @@ Workflow: `.github/workflows/build-apk.yml`
 
 > **Security:** Never commit `.jks`, `.base64`, or password files to git. The `.gitignore` already excludes `*.jks`, `*.base64`, `.keystore_password.txt`.
 
-### Google Cloud Console — Credentials
-
-Для Google Sign-In на Android требуется **два** OAuth Client ID в одном Google Cloud Project:
-
-| Тип | Client ID | Назначение |
-|---|---|---|
-| **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | Проверка SHA-1 + package name (Google Play Services) |
-| **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `requestIdToken()` в коде (генерация ID token) |
-
-#### SHA-1 fingerprints
-
-Оба SHA-1 отпечатка добавлены в **Android OAuth Client ID** в Google Cloud Console:
-
-| Build type | SHA-1 fingerprint | Команда |
-|---|---|---|
-| **Release** | `2A:BF:A4:CA:62:59:78:A2:5D:78:FD:74:2D:CB:CA:07:D2:37:42:72` | `keytool -list -v -keystore healthconnect-release.jks` |
-| **Debug** | `8B:BB:D1:45:E2:61:5B:02:57:E1:3F:26:29:1A:AF:F0:2C:40:77:73` | `keytool -list -v -keystore ~/.android/debug.keystore -storepass android` |
-
-#### Проверка SHA-1 из APK
-
-```bash
-# Убедиться, что APK подписан правильным ключом
-apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
-# Должен показать: SHA-1: 2abfa4ca625978a25d78fd742dcbca07d2374272
-```
-
-**Важно:**
-- `requestIdToken()` в коде использует **Web Client ID**, а Android Client ID остаётся в Google Cloud Console для верификации
-- Оба Client ID должны быть в одном Google Cloud Project
-- SHA-1 из `healthconnect-release.jks` (`2A:BF:A4:CA:...`) добавлен в Android Client ID
-
-#### Настройка OAuth consent screen
-
-1. Откройте [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
-2. Тип: **External**
-3. **Testing** (не требуется верификация)
-4. Обязательно добавьте **Test users** — свой email
-5. На шаге **Scopes** добавьте `https://www.googleapis.com/auth/drive.file`
-
-#### Включённые API
-
-- [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com) — `ENABLED`
-- [Identity Toolkit API](https://console.cloud.google.com/apis/library/identitytoolkit.googleapis.com) — `ENABLED`
-
 ### Release process
 
 ```bash
@@ -253,6 +276,16 @@ git tag v1.1
 git push origin v1.1
 # CI: bump version → build → create GitHub Release
 ```
+
+### Artifacts
+
+| Artifact | Retention | When |
+|---|---|---|
+| `test-results` | 7 days | Always |
+| `coverage-html` | 7 days | Always |
+| `coverage-xml` | 30 days | Always |
+| `HealthConnectExport-debug` | 7 days | Always |
+| `HealthConnectExport-release` | 30 days | Tag push only |
 
 ---
 

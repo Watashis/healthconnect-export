@@ -210,7 +210,8 @@ data class ExportConfig(
     val webhookUrl: String = "",
     val webhookAuthToken: String = "",
     val autoSendWebhook: Boolean = false,
-    val outputDirectory: String = "HealthConnectExport"
+    val outputDirectory: String = "HealthConnectExport",
+    val selectedSourcePackage: String? = null
 )
 
 @Serializable
@@ -416,6 +417,50 @@ fun exerciseTypeToString(value: Int?): String? {
         else -> "Other ($value)"
     }
 }
+
+/**
+ * Map of known health data source packages to human-readable display names.
+ * Used for UI selection and filtering.
+ */
+val KNOWN_SOURCE_PACKAGES: Map<String, String> = mapOf(
+    "com.mi.health" to "Xiaomi Mi Fitness",
+    "com.xiaomi.hm.health" to "Xiaomi Wear",
+    "com.google.android.apps.fitness" to "Google Fit",
+    "com.samsung.samsunghealth" to "Samsung Health",
+    "com.samsung.android.wearable.health" to "Samsung Health (Wear)",
+    "com.fitbit.FitbitMobile" to "Fitbit",
+    "com.mobvoi.companion.at" to "Mobvoi / TicWatch",
+    "com.huawei.health" to "Huawei Health",
+    "com.hmdm.wearable.health" to "Nokia Health",
+    "com.sec.android.app.shealth" to "Samsung S Health",
+    "com.htc.fitness" to "HTC Fitness",
+    "com.sonymobile.advancedwidget.health" to "Sony Health",
+    "com.google.android.wearable.app" to "Google Wear OS"
+)
+
+/**
+ * Returns a human-readable name for a source package, or the raw package name if unknown.
+ */
+fun sourceDisplayName(packageName: String): String {
+    return KNOWN_SOURCE_PACKAGES[packageName] ?: packageName
+}
+
+// ===== Export Summary =====
+
+/**
+ * Dashboard summary computed after export.
+ */
+data class ExportSummary(
+    val totalSteps: Long = 0,
+    val avgHeartRate: Double = 0.0,
+    val totalCalories: Double = 0.0,
+    val totalDistanceMeters: Double = 0.0,
+    val avgSleepMinutes: Long = 0,
+    val totalActiveCalories: Double = 0.0,
+    val daysCount: Int = 0,
+    val startDate: String = "",
+    val endDate: String = ""
+)
 
 // ===== Helpers =====
 

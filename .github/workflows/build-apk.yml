@@ -12,26 +12,22 @@ env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false
 
 jobs:
-  build:
+  # ──────────────────────────────────────────────
+  # Parallel quality checks & debug build
+  # ──────────────────────────────────────────────
+
+  lint:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
+    - uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
-
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-
-    - name: Cache Gradle
-      uses: actions/cache@v4
+    - uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -39,12 +35,162 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+    - run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    - name: Lint
+      run: ./gradlew lintRelease 2>&1 | tail -30
 
-    - name: Create local.properties
-      run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    - name: Ktlint
+      run: ./gradlew ktlintCheck 2>&1 | tail -30
+      continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    - name: Unit tests
+      run: ./gradlew testDebugUnitTest 2>&1 | tail -30
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: app/build/reports/tests/
+        retention-days: 7
+
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    - name: JaCoCo coverage report & verification
+      run: ./gradlew jacocoTestReport jacocoTestCoverageVerification 2>&1 | tail -40
+    - name: Generate coverage badge
+      if: github.ref == 'refs/heads/main'
+      uses: cicirello/jacoco-badge-generator@v2.11.0
+      with:
+        jacoco-csv-file: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.csv
+        badges-directory: badges
+        generate-branches-badge: true
+        generate-summary: true
+        commit-badge: true
+        commit-message: 'chore: update coverage badge'
+        on-missing-report: fail
+    - name: Upload coverage report (HTML)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-html
+        path: app/build/reports/jacoco/jacocoTestReport/html/
+        retention-days: 7
+
+    - name: Upload coverage report (XML)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-xml
+        path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+        retention-days: 30
+
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug 2>&1 | tail -20
+    - name: Rename Debug APK
+      run: |
+        VERSION=$(grep versionName app/build.gradle.kts | grep -oP '\d[\d.]*')
+        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+          cp app/build/outputs/apk/debug/app-debug.apk "HealthConnectExport-${VERSION}-debug.apk"
+        fi
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: HealthConnectExport-debug
+        path: HealthConnectExport-*-debug.apk
+        retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Release build (after parallel jobs)
+  # ──────────────────────────────────────────────
+
+  build-release:
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    needs: [lint, test, build-debug]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    - uses: android-actions/setup-android@v3
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
 
     - name: Bump version (tag push only)
       if: startsWith(github.ref, 'refs/tags/v')
+      id: bump
       run: |
         TAG_VERSION="${GITHUB_REF_NAME#v}"
         echo "Bumping to version: $TAG_VERSION"
@@ -64,35 +210,6 @@ jobs:
         git commit -m "chore: bump version to ${VERSION_NAME} (${VERSION_CODE})"
         git push origin HEAD:main
 
-    - name: Lint
-      run: ./gradlew lintRelease 2>&1 | tail -30
-
-    - name: Unit tests
-      run: ./gradlew testDebugUnitTest 2>&1 | tail -30
-
-    - name: JaCoCo coverage
-      run: ./gradlew jacocoTestReport 2>&1 | tail -20
-      continue-on-error: true
-
-    - name: Upload coverage report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: app/build/reports/jacoco/jacocoTestReport/html/
-        retention-days: 7
-
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: app/build/reports/tests/
-        retention-days: 7
-
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug 2>&1 | tail -20
-
     - name: Decode keystore
       if: startsWith(github.ref, 'refs/tags/v')
       env:
@@ -101,7 +218,6 @@ jobs:
         echo "$KEYSTORE_BASE64" | base64 -d > healthconnect-release.jks 2>/dev/null || true
 
     - name: Build Release APK
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
       env:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       run: ./gradlew assembleRelease 2>&1 | tail -20
@@ -110,25 +226,12 @@ jobs:
     - name: Rename APKs
       run: |
         VERSION="${VERSION_NAME:-$(grep versionName app/build.gradle.kts | grep -oP '\d[\d.]*')}"
-        # Debug
-        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-          cp app/build/outputs/apk/debug/app-debug.apk "HealthConnectExport-${VERSION}-debug.apk"
-        fi
-        # Release signed
         if [ -f app/build/outputs/apk/release/app-release.apk ]; then
           cp app/build/outputs/apk/release/app-release.apk "HealthConnectExport-${VERSION}.apk"
         fi
-        # Release unsigned
         if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
           cp app/build/outputs/apk/release/app-release-unsigned.apk "HealthConnectExport-${VERSION}-unsigned.apk"
         fi
-
-    - name: Upload Debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: HealthConnectExport-debug
-        path: HealthConnectExport-*-debug.apk
-        retention-days: 7
 
     - name: Upload Release APK
       if: startsWith(github.ref, 'refs/tags/v')
@@ -138,9 +241,13 @@ jobs:
         path: HealthConnectExport-*.apk
         retention-days: 30
 
+  # ──────────────────────────────────────────────
+  # GitHub Release (tag push only)
+  # ──────────────────────────────────────────────
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: build-release
     runs-on: ubuntu-latest
     permissions:
       contents: write

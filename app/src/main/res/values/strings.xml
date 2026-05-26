@@ -72,7 +72,8 @@
 
     <!-- Export Button -->
     <string name="export_data_types">Export %d data types</string>
-    <string name="exported_files_title">Exported files (%d):</string>
+    <string name="exported_files_title">Exported files (%d)</string>
+    <string name="exported_files_more">… and %d more</string>
 
     <!-- File sizes -->
     <string name="file_size_bytes">%d B</string>
@@ -99,6 +100,15 @@
     <string name="freq_daily">Daily</string>
     <string name="freq_weekly">Weekly</string>
 
+    <!-- Data Source Selection -->
+    <string name="data_source">Data Source</string>
+    <string name="source_auto">Auto (recommended)</string>
+    <string name="source_auto_desc">Automatically pick the best source</string>
+    <string name="scanning_sources">Scanning for data sources…</string>
+    <string name="no_sources_found">No data sources found</string>
+    <string name="refresh_sources">Refresh sources</string>
+    <string name="refresh">Refresh</string>
+
     <!-- ViewModel messages -->
     <string name="vm_check_permissions">Checking permissions…</string>
     <string name="vm_permissions_required">Health Connect permissions required. Please confirm in the opened window.</string>
@@ -120,4 +130,22 @@
     <string name="vm_invalid_url">Invalid URL format. Must be http:// or https://</string>
     <string name="vm_health_not_available">Could not connect to Health Connect. Please restart the app.</string>
     <string name="vm_health_not_installed">Health Connect is not installed. Please install Health Connect from Google Play.</string>
+
+    <!-- Dashboard Summary -->
+    <string name="dashboard_title">📊 Export Summary</string>
+    <string name="dashboard_period">%s — %s (%d days)</string>
+    <string name="dashboard_steps">Steps</string>
+    <string name="dashboard_avg_hr">Avg Heart Rate</string>
+    <string name="dashboard_calories">Calories</string>
+    <string name="dashboard_distance">Distance</string>
+    <string name="dashboard_avg_sleep">Avg Sleep</string>
+    <string name="dashboard_active_calories">Active Cal</string>
+    <string name="dashboard_dismiss">Dismiss</string>
+    <string name="dashboard_label_steps">Steps</string>
+    <string name="dashboard_label_hr">Avg HR</string>
+    <string name="dashboard_label_calories">kCal</string>
+    <string name="dashboard_label_distance">Dist</string>
+    <string name="dashboard_label_sleep">Avg Sleep</string>
+    <string name="dashboard_label_active_cal">Act Cal</string>
+    <string name="dashboard_no_data">—</string>
 </resources>

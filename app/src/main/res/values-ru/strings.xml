@@ -72,7 +72,8 @@
 
     <!-- Export Button -->
     <string name="export_data_types">Экспорт %d типов данных</string>
-    <string name="exported_files_title">Экспортировано файлов (%d):</string>
+    <string name="exported_files_title">Экспортировано файлов (%d)</string>
+    <string name="exported_files_more">… и ещё %d</string>
 
     <!-- File sizes -->
     <string name="file_size_bytes">%d Б</string>
@@ -99,6 +100,15 @@
     <string name="freq_daily">Ежедневно</string>
     <string name="freq_weekly">Еженедельно</string>
 
+    <!-- Data Source Selection -->
+    <string name="data_source">Источник данных</string>
+    <string name="source_auto">Авто (рекомендуется)</string>
+    <string name="source_auto_desc">Автоматический выбор лучшего источника</string>
+    <string name="scanning_sources">Поиск источников данных…</string>
+    <string name="no_sources_found">Источники данных не найдены</string>
+    <string name="refresh_sources">Обновить источники</string>
+    <string name="refresh">Обновить</string>
+
     <!-- ViewModel messages -->
     <string name="vm_check_permissions">Проверка разрешений…</string>
     <string name="vm_permissions_required">Требуются разрешения Health Connect. Подтвердите в открывшемся окне.</string>
@@ -120,4 +130,22 @@
     <string name="vm_invalid_url">Неверный формат URL. Должен начинаться с http:// или https://</string>
     <string name="vm_health_not_available">Не удалось подключиться к Health Connect. Попробуйте перезапустить приложение.</string>
     <string name="vm_health_not_installed">Health Connect не установлен. Установите приложение Health Connect из Google Play.</string>
+
+    <!-- Dashboard Summary -->
+    <string name="dashboard_title">📊 Сводка экспорта</string>
+    <string name="dashboard_period">%s — %s (%d дн.)</string>
+    <string name="dashboard_steps">Шаги</string>
+    <string name="dashboard_avg_hr">Ср. пульс</string>
+    <string name="dashboard_calories">Калории</string>
+    <string name="dashboard_distance">Дистанция</string>
+    <string name="dashboard_avg_sleep">Ср. сон</string>
+    <string name="dashboard_active_calories">Акт. кал</string>
+    <string name="dashboard_dismiss">Закрыть</string>
+    <string name="dashboard_label_steps">Шаги</string>
+    <string name="dashboard_label_hr">Пульс</string>
+    <string name="dashboard_label_calories">кКал</string>
+    <string name="dashboard_label_distance">Дист</string>
+    <string name="dashboard_label_sleep">Ср. сон</string>
+    <string name="dashboard_label_active_cal">Акт. кал</string>
+    <string name="dashboard_no_data">—</string>
 </resources>

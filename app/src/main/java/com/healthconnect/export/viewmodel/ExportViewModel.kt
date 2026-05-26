@@ -13,6 +13,8 @@ import com.google.android.gms.common.api.ApiException
 import com.healthconnect.export.R
 import com.healthconnect.export.data.*
 import com.healthconnect.export.repository.HealthConnectRepository
+import com.healthconnect.export.usecase.ExportDataUseCase
+import com.healthconnect.export.usecase.ExportStep
 import com.healthconnect.export.util.LocaleManager
 import com.healthconnect.export.repository.LocalExportRepository
 import com.healthconnect.export.repository.GoogleDriveRepository
@@ -23,7 +25,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+
 
 data class ExportUiState(
     val isLoading: Boolean = false,
@@ -42,7 +46,11 @@ data class ExportUiState(
     val webhookUrlError: String? = null,
     val message: String? = null,
     val isDarkTheme: Boolean? = null,
-    val locale: String? = null
+    val locale: String? = null,
+    val availableSources: List<String> = emptyList(),
+    val selectedSourcePackage: String? = null,
+    val sourcesLoading: Boolean = false,
+    val exportSummary: ExportSummary? = null
 )
 
 sealed class DriveStatus {
@@ -65,6 +73,7 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
     private val localRepo = LocalExportRepository(getApplication())
     private val driveRepo = GoogleDriveRepository(getApplication())
     private val webhookRepo = WebhookRepository()
+    private val exportUseCase = ExportDataUseCase(healthRepo, localRepo)
 
     val googleSignInClient: GoogleSignInClient =
         GoogleSignIn.getClient(getApplication(), driveRepo.getSignInOptions())
@@ -87,6 +96,7 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_AUTO_SEND_WEBHOOK = "auto_send_webhook"
         private const val KEY_AUTO_SYNC_DRIVE = "auto_sync_drive"
         private const val KEY_LOCALE = "app_locale"
+        private const val KEY_SOURCE_PACKAGE = "selected_source_package"
     }
 
     // Helper to get localized strings from resources
@@ -100,9 +110,11 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
         loadDateRange()
         loadWebhookSettings()
         loadLocale()
+        loadSourcePreference()
         refreshDriveStatus()
         refreshLocalFiles()
         scheduleExport()
+        fetchAvailableSources()
     }
 
     private fun loadSelectedTypes() {
@@ -198,6 +210,40 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
         getApplication<Application>()
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_AUTO_SEND_WEBHOOK, enabled).apply()
+    }
+
+    private fun loadSourcePreference() {
+        val prefs = getApplication<Application>().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val saved = prefs.getString(KEY_SOURCE_PACKAGE, null)
+        if (saved != null) {
+            _uiState.update { it.copy(selectedSourcePackage = saved) }
+        }
+    }
+
+    private fun saveSourcePreference(sourcePackage: String?) {
+        getApplication<Application>()
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_SOURCE_PACKAGE, sourcePackage).apply()
+    }
+
+    fun setSourcePackage(sourcePackage: String?) {
+        _uiState.update { it.copy(selectedSourcePackage = sourcePackage) }
+        saveSourcePreference(sourcePackage)
+    }
+
+    fun fetchAvailableSources() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(sourcesLoading = true) }
+            try {
+                val sources = healthRepo.getAvailableSources()
+                _uiState.update {
+                    it.copy(availableSources = sources.sorted(), sourcesLoading = false)
+                }
+            } catch (e: Exception) {
+                Log.e("ExportViewModel", "Failed to fetch sources", e)
+                _uiState.update { it.copy(sourcesLoading = false) }
+            }
+        }
     }
 
     private fun loadLocale() {
@@ -328,85 +374,71 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
     fun exportNow() {
         Log.d("ExportViewModel", "exportNow() called")
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, exportProgress = str(R.string.vm_check_permissions)) }
-
             val state = _uiState.value
 
-            val healthAvailable = healthRepo.isHealthConnectAvailable()
-            Log.d("ExportViewModel", "HealthConnect available: $healthAvailable")
-            if (!healthAvailable) {
-                if (healthRepo.isHealthConnectInstalled()) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = str(R.string.vm_health_not_available)
-                        )
+            exportUseCase.execute(
+                context = getApplication(),
+                config = ExportConfig(
+                    enabledTypes = state.selectedTypes,
+                    frequency = state.frequency,
+                    autoSyncDrive = state.autoSyncDrive,
+                    selectedSourcePackage = state.selectedSourcePackage
+                ),
+                startDate = state.startDate,
+                endDate = state.endDate
+            ).collect { step ->
+                when (step) {
+                    is ExportStep.CheckingPermissions -> {
+                        _uiState.update {
+                            it.copy(isLoading = true, exportProgress = str(R.string.vm_check_permissions))
+                        }
                     }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = str(R.string.vm_health_not_installed)
-                        )
+                    is ExportStep.HealthNotAvailable -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, message = str(R.string.vm_health_not_available))
+                        }
                     }
-                }
-                return@launch
-            }
-
-            val hasPermissions = healthRepo.checkPermissions(state.selectedTypes)
-            Log.d("ExportViewModel", "Has permissions: $hasPermissions")
-            if (!hasPermissions) {
-                val permissions = healthRepo.getPermissionsForTypes(state.selectedTypes)
-                Log.d("ExportViewModel", "Requesting permissions: $permissions")
-                pendingPermissions = permissions
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        message = str(R.string.vm_permissions_required)
-                    )
-                }
-                return@launch
-            }
-
-            val config = ExportConfig(
-                enabledTypes = state.selectedTypes,
-                frequency = state.frequency,
-                autoSyncDrive = state.autoSyncDrive
-            )
-
-            _uiState.update { it.copy(exportProgress = str(R.string.vm_reading_data)) }
-
-            try {
-                val records = healthRepo.readPeriod(state.startDate, state.endDate, state.selectedTypes)
-
-                _uiState.update { it.copy(exportProgress = str(R.string.vm_saving_days, records.size)) }
-
-                val files = localRepo.saveRecords(records, config)
-
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        exportProgress = str(R.string.vm_saved_files, files.size),
-                        exportedFiles = files,
-                        message = str(R.string.vm_export_complete, files.size)
-                    )
-                }
-
-                if (state.autoSyncDrive && driveRepo.isSignedIn()) {
-                    syncToDrive(files)
-                }
-
-                if (state.autoSendWebhook && state.webhookUrl.isNotBlank()) {
-                    sendToWebhook(state.webhookUrl, state.webhookAuthToken, records)
-                }
-
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        exportProgress = str(R.string.vm_export_error, e.message ?: ""),
-                        message = str(R.string.vm_export_error, e.message ?: "")
-                    )
+                    is ExportStep.HealthNotInstalled -> {
+                        _uiState.update {
+                            it.copy(isLoading = false, message = str(R.string.vm_health_not_installed))
+                        }
+                    }
+                    is ExportStep.PermissionsRequired -> {
+                        pendingPermissions = step.permissions
+                        _uiState.update {
+                            it.copy(isLoading = false, message = str(R.string.vm_permissions_required))
+                        }
+                    }
+                    is ExportStep.Progress -> {
+                        _uiState.update { it.copy(exportProgress = step.message) }
+                    }
+                    is ExportStep.Complete -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                exportProgress = str(R.string.vm_saved_files, step.files.size),
+                                exportedFiles = step.files,
+                                exportSummary = step.summary,
+                                message = str(R.string.vm_export_complete, step.files.size)
+                            )
+                        }
+                        // Post-export: auto-sync to Drive
+                        if (state.autoSyncDrive && driveRepo.isSignedIn()) {
+                            syncToDrive(step.files)
+                        }
+                        // Post-export: send to webhook
+                        if (state.autoSendWebhook && state.webhookUrl.isNotBlank()) {
+                            sendToWebhook(state.webhookUrl, state.webhookAuthToken, step.records)
+                        }
+                    }
+                    is ExportStep.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = step.message
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -520,5 +552,9 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    fun dismissSummary() {
+        _uiState.update { it.copy(exportSummary = null) }
     }
 }

@@ -3,18 +3,20 @@ package com.healthconnect.export.repository
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.records.metadata.DataOrigin
+import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.healthconnect.export.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -25,7 +27,7 @@ class HealthConnectRepository(private val context: Context) {
     companion object {
         private const val TAG = "HealthConnectRepo"
         private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
-        private const val PAGE_SIZE = 10000
+        private const val PAGE_SIZE = 5000
 
         /**
          * Пакеты приложений для фильтрации dataOrigin, упорядоченные по приоритету.
@@ -36,6 +38,8 @@ class HealthConnectRepository(private val context: Context) {
             "com.xiaomi.hm.health",       // Xiaomi Wear / Mi Band
             "com.google.android.apps.fitness", // Google Fit
             "com.samsung.android.wearable.health", // Samsung Health
+            "com.fitbit.FitbitMobile",    // Fitbit
+            "com.mobvoi.companion.at",    // Mobvoi / TicWatch
             "com.huawei.health",          // Huawei Health
             "com.hmdm.wearable.health",   // Nokia Health
             "com.sec.android.app.shealth", // Samsung S Health
@@ -147,11 +151,54 @@ class HealthConnectRepository(private val context: Context) {
     }
 
     /**
+     * Discovers available data source packages by querying recent health records.
+     * Returns a set of package names that have data available on device.
+     */
+    suspend fun getAvailableSources(): Set<String> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext emptySet()
+        val now = Instant.now()
+        val weekAgo = now.minus(7, ChronoUnit.DAYS)
+        val timeFilter = TimeRangeFilter.between(weekAgo, now)
+
+        val origins = mutableSetOf<String>()
+
+        // Query steps as a representative data type to discover origins
+        try {
+            val stepsRequest = ReadRecordsRequest(
+                StepsRecord::class,
+                timeRangeFilter = timeFilter,
+                pageSize = 1
+            )
+            val stepsResponse = c.readRecords(stepsRequest)
+            stepsResponse.records.forEach { record ->
+                record.metadata.dataOrigin?.packageName?.let { origins.add(it) }
+            }
+        } catch (_: Exception) {}
+
+        // Also query heart rate for more complete origin discovery
+        try {
+            val hrRequest = ReadRecordsRequest(
+                HeartRateRecord::class,
+                timeRangeFilter = timeFilter,
+                pageSize = 1
+            )
+            val hrResponse = c.readRecords(hrRequest)
+            hrResponse.records.forEach { record ->
+                record.metadata.dataOrigin?.packageName?.let { origins.add(it) }
+            }
+        } catch (_: Exception) {}
+
+        Log.d(TAG, "getAvailableSources: $origins")
+        origins
+    }
+
+    /**
      * Reads all specified health data types for a single day
      */
     suspend fun readDay(
         date: LocalDate,
-        types: Set<HealthDataType>
+        types: Set<HealthDataType>,
+        selectedSourcePackage: String? = null
     ): DailyHealthRecord = withContext(Dispatchers.IO) {
         val start = date.atStartOfDay(ZoneId.systemDefault()).toInstant()
         val end = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant()
@@ -166,13 +213,13 @@ class HealthConnectRepository(private val context: Context) {
 
         DailyHealthRecord(
             date = date.toString(),
-            steps = if (types.contains(HealthDataType.STEPS)) readSteps(timeFilter) else null,
+            steps = if (types.contains(HealthDataType.STEPS)) readSteps(timeFilter, selectedSourcePackage) else null,
             heartRate = if (types.contains(HealthDataType.HEART_RATE)) readHeartRate(timeFilter) else null,
             sleep = if (types.contains(HealthDataType.SLEEP)) readSleep(timeFilter) else null,
-            calories = if (types.contains(HealthDataType.CALORIES)) readCalories(timeFilter) else null,
-            distance = if (types.contains(HealthDataType.DISTANCE)) readDistance(timeFilter) else null,
-            floorsClimbed = if (types.contains(HealthDataType.FLOORS_CLIMBED)) readFloorsClimbed(timeFilter) else null,
-            activeCalories = if (types.contains(HealthDataType.ACTIVE_CALORIES)) readActiveCalories(timeFilter) else null,
+            calories = if (types.contains(HealthDataType.CALORIES)) readCalories(timeFilter, selectedSourcePackage) else null,
+            distance = if (types.contains(HealthDataType.DISTANCE)) readDistance(timeFilter, selectedSourcePackage) else null,
+            floorsClimbed = if (types.contains(HealthDataType.FLOORS_CLIMBED)) readFloorsClimbed(timeFilter, selectedSourcePackage) else null,
+            activeCalories = if (types.contains(HealthDataType.ACTIVE_CALORIES)) readActiveCalories(timeFilter, selectedSourcePackage) else null,
             weight = if (types.contains(HealthDataType.WEIGHT)) readWeight(timeFilter) else null,
             bodyFat = if (types.contains(HealthDataType.BODY_FAT)) readBodyFat(timeFilter) else null,
             bloodPressure = if (types.contains(HealthDataType.BLOOD_PRESSURE)) readBloodPressure(timeFilter) else null,
@@ -196,12 +243,13 @@ class HealthConnectRepository(private val context: Context) {
     suspend fun readPeriod(
         startDate: LocalDate,
         endDate: LocalDate,
-        types: Set<HealthDataType>
+        types: Set<HealthDataType>,
+        selectedSourcePackage: String? = null
     ): List<DailyHealthRecord> {
         val records = mutableListOf<DailyHealthRecord>()
         var current = startDate
         while (!current.isAfter(endDate)) {
-            records.add(readDay(current, types))
+            records.add(readDay(current, types, selectedSourcePackage))
             current = current.plusDays(1)
         }
         return records
@@ -215,13 +263,15 @@ class HealthConnectRepository(private val context: Context) {
      * а на некоторых прошивках (MIUI/HyperOS) может быть меньше (напр. 1000).
      * Чтобы гарантированно получить всё, используем pageToken из ответа.
      */
-    private suspend fun <T> readAllPages(request: ReadRecordsRequest<T>): List<T> {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal suspend fun <T : Record> readAllPages(request: ReadRecordsRequest<T>): List<T> {
         val c = client ?: return emptyList()
         val allRecords = mutableListOf<T>()
         var pageToken: String? = null
         do {
+            val recordType = request.recordType
             val pageRequest = ReadRecordsRequest(
-                recordType = request.recordType,
+                recordType = recordType,
                 timeRangeFilter = request.timeRangeFilter,
                 dataOriginFilter = request.dataOriginFilter,
                 ascendingOrder = request.ascendingOrder,
@@ -238,64 +288,31 @@ class HealthConnectRepository(private val context: Context) {
 
     // ===== Private readers =====
 
-    private suspend fun readSteps(filter: TimeRangeFilter): StepsData? {
+    private suspend fun readSteps(filter: TimeRangeFilter, selectedSourcePackage: String? = null): StepsData? {
         val c = client ?: return null
         val allRecords = readAllPages(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = filter))
         if (allRecords.isEmpty()) return null
 
-        val filtered = filterByPreferredOrigin(allRecords)
+        val filtered = filterByPreferredOrigin(allRecords, selectedSourcePackage)
         if (filtered.isEmpty()) return null
 
-        val deduped = mergeOverlappingIntervals(filtered)
-        val total = deduped.sumOf { it.count }
+        // Single source — just sum (overlaps from same source are rare in practice)
+        val total = filtered.sumOf { it.count }
 
-        Log.d(TAG, "readSteps: raw=${allRecords.size}, filtered=${filtered.size}, deduped=${deduped.size}, totalSteps=$total")
-        return StepsData(totalSteps = total, recordsCount = deduped.size)
-    }
-
-    /**
-     * Объединяет StepsRecord с близкими/перекрывающимися временными интервалами.
-     */
-    private fun mergeOverlappingIntervals(records: List<StepsRecord>): List<StepsRecord> {
-        if (records.size <= 1) return records
-
-        val sorted = records.sortedBy { it.startTime }
-        val result = mutableListOf<StepsRecord>()
-
-        var current = sorted.first()
-        for (i in 1 until sorted.size) {
-            val next = sorted[i]
-            val gap = Duration.between(current.endTime, next.startTime)
-
-            if (!gap.isNegative && gap.seconds <= 3) {
-                val extendedEnd = if (next.endTime > current.endTime) next.endTime else current.endTime
-                current = StepsRecord(
-                    count = current.count + next.count,
-                    startTime = current.startTime,
-                    endTime = extendedEnd
-                )
-            } else if (gap.isNegative) {
-                val extendedEnd = if (next.endTime > current.endTime) next.endTime else current.endTime
-                current = StepsRecord(
-                    count = current.count + next.count,
-                    startTime = current.startTime,
-                    endTime = extendedEnd
-                )
-            } else {
-                result.add(current)
-                current = next
-            }
-        }
-        result.add(current)
-
-        return result
+        Log.d(TAG, "readSteps: raw=${allRecords.size}, filtered=${filtered.size}, totalSteps=$total")
+        return StepsData(totalSteps = total, recordsCount = filtered.size)
     }
 
     /**
      * Фильтрует записи по предпочитаемому пакету-источнику данных.
-     * Необходимо, чтобы одни и те же шаги не суммировались от Mi Fitness и Google Fit одновременно.
+     * Необходимо, чтобы одни и те же данные не суммировались от разных источников одновременно.
+     *
+     * @param selectedSourcePackage если задан — используется только этот источник
+     * @param records записи для фильтрации
+     * @return отфильтрованные записи от одного источника
      */
-    private fun <T> filterByPreferredOrigin(records: List<T>): List<T> {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal fun <T> filterByPreferredOrigin(records: List<T>, selectedSourcePackage: String? = null): List<T> {
         if (records.isEmpty()) return records
 
         val groupedByOrigin = records.groupBy { record ->
@@ -303,16 +320,35 @@ class HealthConnectRepository(private val context: Context) {
             origin?.packageName ?: "unknown"
         }
 
-        Log.d(TAG, "filterByPreferredOrigin: sources=${groupedByOrigin.keys}")
+        Log.d(TAG, "filterByPreferredOrigin: sources=${groupedByOrigin.keys}, selected=$selectedSourcePackage")
 
+        // 0. If user explicitly selected a source, use it (even if not in preferred list)
+        if (selectedSourcePackage != null) {
+            val selected = groupedByOrigin[selectedSourcePackage]
+            if (selected != null) {
+                Log.d(TAG, "filterByPreferredOrigin: using user-selected '$selectedSourcePackage' (${selected.size} records)")
+                return selected
+            }
+            Log.w(TAG, "filterByPreferredOrigin: user-selected '$selectedSourcePackage' not found in sources, falling back to auto")
+        }
+
+        // 1. Try preferred packages in order
         for (preferred in PREFERRED_PACKAGES) {
             if (groupedByOrigin.containsKey(preferred)) {
-                Log.d(TAG, "filterByPreferredOrigin: using '$preferred', ignoring ${groupedByOrigin.keys - preferred}")
-                return groupedByOrigin[preferred]!!
+                val selected = groupedByOrigin[preferred]!!
+                Log.d(TAG, "filterByPreferredOrigin: using '$preferred' (${selected.size} records), ignoring ${groupedByOrigin.keys - preferred}")
+                return selected
             }
         }
 
-        Log.d(TAG, "filterByPreferredOrigin: no preferred source, using all (${records.size} records from ${groupedByOrigin.keys})")
+        // 2. Fallback: pick the source with the most records (never mix sources)
+        val bestSource = groupedByOrigin.maxByOrNull { (_, records) -> records.size }
+        if (bestSource != null) {
+            val (source, selected) = bestSource
+            Log.d(TAG, "filterByPreferredOrigin: no preferred, using '$source' with most records (${selected.size}), ignoring ${groupedByOrigin.keys - source}")
+            return selected
+        }
+
         return records
     }
 
@@ -355,41 +391,41 @@ class HealthConnectRepository(private val context: Context) {
         )
     }
 
-    private suspend fun readCalories(filter: TimeRangeFilter): CaloriesData? {
+    private suspend fun readCalories(filter: TimeRangeFilter, selectedSourcePackage: String? = null): CaloriesData? {
         val c = client ?: return null
         val allRecords = readAllPages(ReadRecordsRequest(TotalCaloriesBurnedRecord::class, timeRangeFilter = filter))
         if (allRecords.isEmpty()) return null
-        val filtered = filterByPreferredOrigin(allRecords)
+        val filtered = filterByPreferredOrigin(allRecords, selectedSourcePackage)
         if (filtered.isEmpty()) return null
         val total = filtered.sumOf { it.energy.inKilocalories }
         return CaloriesData(totalCalories = total, recordsCount = filtered.size)
     }
 
-    private suspend fun readDistance(filter: TimeRangeFilter): DistanceData? {
+    private suspend fun readDistance(filter: TimeRangeFilter, selectedSourcePackage: String? = null): DistanceData? {
         val c = client ?: return null
         val allRecords = readAllPages(ReadRecordsRequest(DistanceRecord::class, timeRangeFilter = filter))
         if (allRecords.isEmpty()) return null
-        val filtered = filterByPreferredOrigin(allRecords)
+        val filtered = filterByPreferredOrigin(allRecords, selectedSourcePackage)
         if (filtered.isEmpty()) return null
         val total = filtered.sumOf { it.distance.inMeters }
         return DistanceData(totalDistanceMeters = total, recordsCount = filtered.size)
     }
 
-    private suspend fun readFloorsClimbed(filter: TimeRangeFilter): FloorsClimbedData? {
+    private suspend fun readFloorsClimbed(filter: TimeRangeFilter, selectedSourcePackage: String? = null): FloorsClimbedData? {
         val c = client ?: return null
         val allRecords = readAllPages(ReadRecordsRequest(FloorsClimbedRecord::class, timeRangeFilter = filter))
         if (allRecords.isEmpty()) return null
-        val filtered = filterByPreferredOrigin(allRecords)
+        val filtered = filterByPreferredOrigin(allRecords, selectedSourcePackage)
         if (filtered.isEmpty()) return null
         val total = filtered.sumOf { it.floors }
         return FloorsClimbedData(totalFloors = total, recordsCount = filtered.size)
     }
 
-    private suspend fun readActiveCalories(filter: TimeRangeFilter): ActiveCaloriesData? {
+    private suspend fun readActiveCalories(filter: TimeRangeFilter, selectedSourcePackage: String? = null): ActiveCaloriesData? {
         val c = client ?: return null
         val allRecords = readAllPages(ReadRecordsRequest(ActiveCaloriesBurnedRecord::class, timeRangeFilter = filter))
         if (allRecords.isEmpty()) return null
-        val filtered = filterByPreferredOrigin(allRecords)
+        val filtered = filterByPreferredOrigin(allRecords, selectedSourcePackage)
         if (filtered.isEmpty()) return null
         val total = filtered.sumOf { it.energy.inKilocalories }
         return ActiveCaloriesData(totalCalories = total, recordsCount = filtered.size)

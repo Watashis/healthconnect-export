@@ -3,18 +3,17 @@ package com.healthconnect.export.ui
 import android.app.DatePickerDialog
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
@@ -47,6 +46,8 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stairs
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,7 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.healthconnect.export.R
 import com.healthconnect.export.data.ExportFrequency
 import com.healthconnect.export.data.HealthDataType
-import kotlinx.coroutines.delay
+import com.healthconnect.export.data.sourceDisplayName
 import com.healthconnect.export.viewmodel.DriveStatus
 import com.healthconnect.export.viewmodel.ExportViewModel
 import com.healthconnect.export.viewmodel.ScheduleStatus
@@ -228,6 +229,17 @@ fun ExportScreen(
                 )
             }
 
+            // Data Source Selection
+            item {
+                DataSourceCard(
+                    availableSources = uiState.availableSources,
+                    selectedSourcePackage = uiState.selectedSourcePackage,
+                    sourcesLoading = uiState.sourcesLoading,
+                    onSourceSelected = { viewModel.setSourcePackage(it) },
+                    onRefresh = { viewModel.fetchAvailableSources() }
+                )
+            }
+
             // Date Range Selection
             item {
                 DateRangeCard(
@@ -249,6 +261,29 @@ fun ExportScreen(
                         onCheckedChange = { viewModel.setAutoSyncDrive(it) }
                     )
                     Text(stringResource(R.string.auto_sync_drive))
+                }
+            }
+
+            // Exported Files List
+            if (uiState.exportedFiles.isNotEmpty()) {
+                item(key = "exported_files_card") {
+                    ExportedFilesCard(files = uiState.exportedFiles)
+                }
+            }
+
+            // Dashboard Summary
+            item(key = "dashboard_summary") {
+                AnimatedVisibility(
+                    visible = uiState.exportSummary != null,
+                    enter = expandVertically(animationSpec = tween(400)) + fadeIn(tween(400)),
+                    exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(tween(300))
+                ) {
+                    uiState.exportSummary?.let { summary ->
+                        ExportSummaryCard(
+                            summary = summary,
+                            onDismiss = { viewModel.dismissSummary() }
+                        )
+                    }
                 }
             }
 
@@ -274,69 +309,9 @@ fun ExportScreen(
                 }
             }
 
-            // Exported Files List
-            if (uiState.exportedFiles.isNotEmpty()) {
-                item(key = "exported_header") {
-                    var headerVisible by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) { headerVisible = true }
-                    AnimatedVisibility(
-                        visible = headerVisible,
-                        enter = fadeIn(tween(300)) + slideInVertically(tween(300))
-                    ) {
-                        Text(
-                            stringResource(R.string.exported_files_title, uiState.exportedFiles.size),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
-                itemsIndexed(uiState.exportedFiles, key = { _, file -> file.absolutePath }) { index, file ->
-                    var itemVisible by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) {
-                        delay((30L * index.coerceAtMost(10))) // stagger — до 300мс макс
-                        itemVisible = true
-                    }
-                    AnimatedVisibility(
-                        visible = itemVisible,
-                        enter = fadeIn(tween(300)) + slideInVertically(tween(300))
-                    ) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Save, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(file.name, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        formatFileSize(file.length()),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
-    }
-}
-
-@Composable
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> stringResource(R.string.file_size_bytes, bytes)
-        bytes < 1024 * 1024 -> stringResource(R.string.file_size_kb, bytes / 1024)
-        else -> stringResource(R.string.file_size_mb, bytes / (1024.0 * 1024.0))
     }
 }
 
@@ -932,6 +907,263 @@ fun DatePickerButton(modifier: Modifier = Modifier, label: String, date: LocalDa
     }
 }
 
+// ===== Exported Files Card =====
+
+@Composable
+fun ExportedFilesCard(files: List<java.io.File>) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.15f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Save,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.exported_files_title, files.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            files.take(5).forEach { file ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = file.name,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = formatFileSize(file.length()),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (files.size > 5) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.exported_files_more, files.size - 5),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> stringResource(R.string.file_size_bytes, bytes)
+        bytes < 1024 * 1024 -> stringResource(R.string.file_size_kb, bytes / 1024)
+        else -> stringResource(R.string.file_size_mb, bytes / (1024.0 * 1024.0))
+    }
+}
+
+// ===== Export Summary (Dashboard) Card =====
+
+private fun formatNumber(value: Long): String {
+    return when {
+        value >= 1_000_000 -> String.format("%.1fM", value / 1_000_000.0)
+        value >= 1_000 -> String.format("%,d", value)
+        else -> value.toString()
+    }
+}
+
+private fun formatMinutesToHours(minutes: Long): String {
+    val hours = minutes / 60
+    val mins = minutes % 60
+    return if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+}
+
+@Composable
+fun ExportSummaryCard(
+    summary: com.healthconnect.export.data.ExportSummary,
+    onDismiss: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    stringResource(R.string.dashboard_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.dashboard_dismiss),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Period
+            Text(
+                stringResource(R.string.dashboard_period, summary.startDate, summary.endDate, summary.daysCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Metrics grid — 3 columns
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Steps
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.DirectionsWalk,
+                    value = formatNumber(summary.totalSteps),
+                    label = stringResource(R.string.dashboard_label_steps),
+                    available = summary.totalSteps > 0
+                )
+                // Heart Rate
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Favorite,
+                    value = if (summary.avgHeartRate > 0) "${summary.avgHeartRate.toInt()} bpm" else stringResource(R.string.dashboard_no_data),
+                    label = stringResource(R.string.dashboard_label_hr),
+                    available = summary.avgHeartRate > 0
+                )
+                // Calories
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.LocalFireDepartment,
+                    value = if (summary.totalCalories > 0) formatNumber(summary.totalCalories.toLong()) else stringResource(R.string.dashboard_no_data),
+                    label = stringResource(R.string.dashboard_label_calories),
+                    available = summary.totalCalories > 0
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Second row — 3 columns
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Distance
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Straighten,
+                    value = if (summary.totalDistanceMeters > 0) {
+                        val km = summary.totalDistanceMeters / 1000.0
+                        if (km >= 1) String.format("%.1f km", km) else "${summary.totalDistanceMeters.toInt()} m"
+                    } else stringResource(R.string.dashboard_no_data),
+                    label = stringResource(R.string.dashboard_label_distance),
+                    available = summary.totalDistanceMeters > 0
+                )
+                // Sleep
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Nightlight,
+                    value = if (summary.avgSleepMinutes > 0) formatMinutesToHours(summary.avgSleepMinutes) else stringResource(R.string.dashboard_no_data),
+                    label = stringResource(R.string.dashboard_label_sleep),
+                    available = summary.avgSleepMinutes > 0
+                )
+                // Active Calories
+                StatCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Bolt,
+                    value = if (summary.totalActiveCalories > 0) formatNumber(summary.totalActiveCalories.toLong()) else stringResource(R.string.dashboard_no_data),
+                    label = stringResource(R.string.dashboard_label_active_cal),
+                    available = summary.totalActiveCalories > 0
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dismiss button
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.dashboard_dismiss))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    value: String,
+    label: String,
+    available: Boolean
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (available) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        modifier = modifier
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(20.dp),
+                tint = if (available) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (available) MaterialTheme.colorScheme.onSurface
+                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 // ===== Webhook Card =====
 
 @Composable
@@ -1004,6 +1236,140 @@ fun WebhookCard(
                     if (webhookUrl.isBlank()) stringResource(R.string.enter_url_first)
                     else stringResource(R.string.send_json)
                 )
+            }
+        }
+    }
+}
+
+// ===== Data Source Selection Card =====
+
+@Composable
+fun DataSourceCard(
+    availableSources: List<String>,
+    selectedSourcePackage: String?,
+    sourcesLoading: Boolean,
+    onSourceSelected: (String?) -> Unit,
+    onRefresh: () -> Unit
+) {
+    Card {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.data_source),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (sourcesLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.scanning_sources),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (availableSources.isEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        stringResource(R.string.no_sources_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onRefresh) {
+                        Text(stringResource(R.string.refresh))
+                    }
+                }
+            } else {
+                // Auto option
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .clickable { onSourceSelected(null) }
+                ) {
+                    RadioButton(
+                        selected = selectedSourcePackage == null,
+                        onClick = { onSourceSelected(null) }
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.source_auto),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            stringResource(R.string.source_auto_desc),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Source list
+                availableSources.forEach { packageName ->
+                    val isSelected = selectedSourcePackage == packageName
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clickable { onSourceSelected(packageName) }
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSourceSelected(packageName) }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = sourceDisplayName(packageName),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Refresh button
+                OutlinedButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(stringResource(R.string.refresh_sources))
+                }
             }
         }
     }

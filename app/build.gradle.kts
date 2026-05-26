@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
     id("jacoco")
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 android {
@@ -49,13 +50,16 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             val keystoreExists = rootProject.file("healthconnect-release.jks").exists()
             println("DEBUG SIGNING: keystore exists=$keystoreExists, KEYSTORE_PASSWORD set=${System.getenv("KEYSTORE_PASSWORD") != null}")
-            signingConfig = if (keystoreExists) {
-                signingConfigs.getByName("release")
-            } else null
+            signingConfig =
+                if (keystoreExists) {
+                    signingConfigs.getByName("release")
+                } else {
+                    null
+                }
         }
     }
 
@@ -66,6 +70,10 @@ android {
             excludes += "META-INF/LICENSE.md"
             excludes += "META-INF/LICENSE-notice.md"
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     lint {
@@ -86,36 +94,122 @@ jacoco {
     toolVersion = "0.8.11"
 }
 
+// Shared JaCoCo configuration
+val fileFilter =
+    listOf(
+        "**/R.class",
+        "**/R\$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+    )
+
+// Kotlin classes location (AGP 9.x)
+val kotlinDebugClasses =
+    fileTree("${layout.buildDirectory.get()}/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
+        exclude(fileFilter)
+    }
+
 tasks.register("jacocoTestReport", JacocoReport::class) {
     dependsOn("testDebugUnitTest")
 
     reports {
         html.required.set(true)
         xml.required.set(true)
-        csv.required.set(false)
-    }
-
-    val fileFilter = listOf(
-        "**/R.class",
-        "**/R\$*.class",
-        "**/BuildConfig.*",
-        "**/Manifest*.*",
-        "**/*Test*.*",
-        "android/**/*.*"
-    )
-
-    val debugTree = fileTree("${layout.buildDirectory.get()}/intermediates/javac/debug") {
-        exclude(fileFilter)
-    }
-    val kotlinDebugTree = fileTree("${layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
+        csv.required.set(true)
     }
 
     sourceDirectories.setFrom(files("src/main/java"))
-    classDirectories.setFrom(files(debugTree, kotlinDebugTree))
-    executionData.setFrom(fileTree(layout.buildDirectory.get()) {
-        include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
-    })
+    classDirectories.setFrom(files(kotlinDebugClasses))
+    executionData.setFrom(files("${layout.buildDirectory.get()}/jacoco/testDebugUnitTest.exec"))
+}
+
+tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::class) {
+    dependsOn("testDebugUnitTest")
+
+    sourceDirectories.setFrom(files("src/main/java"))
+    classDirectories.setFrom(files(kotlinDebugClasses))
+    executionData.setFrom(files("${layout.buildDirectory.get()}/jacoco/testDebugUnitTest.exec"))
+
+    violationRules {
+        // ── Global project-wide thresholds ──
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.30".toBigDecimal()
+            }
+        }
+        rule {
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = "0.12".toBigDecimal()
+            }
+        }
+        rule {
+            limit {
+                counter = "INSTRUCTION"
+                value = "COVEREDRATIO"
+                minimum = "0.15".toBigDecimal()
+            }
+        }
+        rule {
+            limit {
+                counter = "CLASS"
+                value = "COVEREDRATIO"
+                minimum = "0.45".toBigDecimal()
+            }
+        }
+
+        // ── Per-package thresholds ──
+        // worker — DailyExportWorker (LINE ≥ 90%)
+        rule {
+            includes = listOf("com.healthconnect.export.worker.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.90".toBigDecimal()
+            }
+        }
+        // data — DataModels, mappers, serialization (LINE ≥ 70%)
+        rule {
+            includes = listOf("com.healthconnect.export.data.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.70".toBigDecimal()
+            }
+        }
+        // viewmodel — ExportViewModel (LINE ≥ 60%)
+        rule {
+            includes = listOf("com.healthconnect.export.viewmodel.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.60".toBigDecimal()
+            }
+        }
+        // util — LocaleManager (LINE ≥ 15%)
+        rule {
+            includes = listOf("com.healthconnect.export.util.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.15".toBigDecimal()
+            }
+        }
+        // repository — HealthConnect, Drive, Webhook, Local (LINE ≥ 10%)
+        rule {
+            includes = listOf("com.healthconnect.export.repository.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.10".toBigDecimal()
+            }
+        }
+    }
 }
 
 // Health Connect permissions property injection into merged manifest
@@ -170,6 +264,13 @@ dependencies {
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.11.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
+    testImplementation("androidx.work:work-testing:2.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.activity:activity-compose:1.8.2")
+    testImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))

@@ -1,5 +1,13 @@
 # HealthConnect Export 📱
 
+[![CI](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml/badge.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
+[![Coverage](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/coverage.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
+[![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.1.20-purple)](https://kotlinlang.org)
+
+> Coverage badge auto-updates on every push to `main` via CI.
+
 Android app for exporting Google Health Connect data to JSON format with optional Google Drive sync and webhook delivery.
 
 ## Features ✨
@@ -47,14 +55,19 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Run all unit tests
 ./gradlew testDebugUnitTest
 
-# Coverage report
-./gradlew jacocoTestReport
+# Coverage report + gate check
+./gradlew jacocoTestReport jacocoTestCoverageVerification
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites:**
-- `HumanReadableMapperTest` — JSON serialization with human-readable constants
-- `WebhookRepositoryTest` — 13 test cases for URL validation
+**Test suites (96 total):**
+
+| File | Tests | Scope |
+|---|---|---|
+| `HumanReadableMapperTest` | 33 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
+| `WebhookRepositoryTest` | 13 | `isValidWebhookUrl()` URL validation |
+| `DailyExportWorkerTest` | 14 | `doWork()` (10) + `schedule()` (4) via WorkManager |
+| `DataModelsSerializationTest` | 36 | Roundtrip serialization: DailyHealthRecord, ExportConfig, enums, SpeedData |
 
 ## CI/CD 🚀
 
@@ -70,9 +83,39 @@ Workflow: `.github/workflows/build-apk.yml`
 ### Pipeline
 
 ```
-Push → Lint → Unit tests → Coverage → Debug APK
-Tag push → + Decode keystore → Sign → Release APK → GitHub Release
+Push → Lint + Ktlint → Unit tests
+     → Coverage (JaCoCo report + gate with 9 rules + badge)
+     → Debug APK
+     └─ Tag push → Decode keystore → Sign → Release APK → GitHub Release
 ```
+
+### Coverage gate
+
+After every push, JaCoCo verifies coverage against 9 rules. If any rule fails, the `coverage` job fails:
+
+| Scope | Rule | Threshold |
+|---|---|---|
+| **Project-wide** | LINE | ≥ 30% |
+| | BRANCH | ≥ 12% |
+| | INSTRUCTION | ≥ 15% |
+| | CLASS | ≥ 45% |
+| **worker** package | LINE | ≥ 90% |
+| **data** package | LINE | ≥ 70% |
+| **viewmodel** package | LINE | ≥ 60% |
+| **util** package | LINE | ≥ 15% |
+| **repository** package | LINE | ≥ 10% |
+
+On push to `main`, a coverage badge is auto-committed to `badges/`.
+
+### Artifacts
+
+| Artifact | Retention | Content |
+|---|---|---|
+| `test-results` | 7 days | HTML test reports |
+| `coverage-html` | 7 days | JaCoCo HTML report |
+| `coverage-xml` | 30 days | JaCoCo XML for Codecov/SonarCloud |
+| `HealthConnectExport-debug` | 7 days | Debug APK |
+| `HealthConnectExport-release` | 30 days | Signed release APK (tag push only) |
 
 ### GitHub Secrets
 
