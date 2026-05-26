@@ -93,7 +93,7 @@
     <string name="locale_switch">Language</string>
     <string name="locale_system">System</string>
     <string name="locale_en">English</string>
-    <string name="locale_ru">Русский</string>
+    <string name="locale_ru">Russian</string>
 
     <!-- Frequency -->
     <string name="freq_manual">Manual</string>
@@ -130,6 +130,12 @@
     <string name="vm_invalid_url">Invalid URL format. Must be http:// or https://</string>
     <string name="vm_health_not_available">Could not connect to Health Connect. Please restart the app.</string>
     <string name="vm_health_not_installed">Health Connect is not installed. Please install Health Connect from Google Play.</string>
+
+    <!-- JSON Viewer -->
+    <string name="json_viewer_title">%s</string>
+    <string name="json_viewer_close">Close</string>
+    <string name="json_viewer_open_error">Could not read file</string>
+    <string name="json_viewer_copy">Copy to clipboard</string>
 
     <!-- Dashboard Summary -->
     <string name="dashboard_title">📊 Export Summary</string>

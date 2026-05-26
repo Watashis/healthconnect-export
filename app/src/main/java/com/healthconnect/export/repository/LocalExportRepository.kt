@@ -96,4 +96,17 @@ class LocalExportRepository(private val context: Context) {
             if (date.isBefore(cutoff)) file.delete()
         }
     }
+
+    /**
+     * Deletes a single export file for the given date.
+     * Returns true if the file was deleted, false if it didn't exist.
+     */
+    fun deleteExport(date: LocalDate, config: ExportConfig): Boolean {
+        val file = File(getExportDirectory(config), getFilenameForDate(date))
+        return if (file.exists()) {
+            file.delete()
+        } else {
+            false
+        }
+    }
 }

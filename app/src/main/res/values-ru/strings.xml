@@ -81,18 +81,18 @@
     <string name="file_size_mb">%.1f МБ</string>
 
     <!-- Webhook -->
-    <string name="webhook">Webhook</string>
-    <string name="webhook_url_label">Webhook URL</string>
+    <string name="webhook">Вебхук</string>
+    <string name="webhook_url_label">URL вебхука</string>
     <string name="webhook_url_placeholder">https://example.com/api/health-data</string>
-    <string name="bearer_token_label">Bearer Token (необязательно)</string>
+    <string name="bearer_token_label">Токен Bearer (необязательно)</string>
     <string name="bearer_token_placeholder">sk-…</string>
-    <string name="enter_url_first">Сначала введите URL webhook</string>
-    <string name="send_json">Отправлять JSON на webhook после экспорта</string>
+    <string name="enter_url_first">Сначала введите URL вебхука</string>
+    <string name="send_json">Отправлять JSON на вебхук после экспорта</string>
 
     <!-- Locale selector -->
     <string name="locale_switch">Язык</string>
     <string name="locale_system">Системный</string>
-    <string name="locale_en">English</string>
+    <string name="locale_en">Английский</string>
     <string name="locale_ru">Русский</string>
 
     <!-- Frequency -->
@@ -130,6 +130,12 @@
     <string name="vm_invalid_url">Неверный формат URL. Должен начинаться с http:// или https://</string>
     <string name="vm_health_not_available">Не удалось подключиться к Health Connect. Попробуйте перезапустить приложение.</string>
     <string name="vm_health_not_installed">Health Connect не установлен. Установите приложение Health Connect из Google Play.</string>
+
+    <!-- JSON Viewer -->
+    <string name="json_viewer_title">%s</string>
+    <string name="json_viewer_close">Закрыть</string>
+    <string name="json_viewer_open_error">Не удалось прочитать файл</string>
+    <string name="json_viewer_copy">Копировать в буфер</string>
 
     <!-- Dashboard Summary -->
     <string name="dashboard_title">📊 Сводка экспорта</string>

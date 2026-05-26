@@ -480,4 +480,319 @@ class DailyExportWorkerTest {
     fun `work name constant is correct`() {
         assertEquals("daily_health_export", DailyExportWorker.WORK_NAME)
     }
+
+    @Test
+    fun `getStatus returns live data from work manager`() {
+        val mockWorkManager = mock<WorkManager>()
+        val mockLiveData = mock<androidx.lifecycle.LiveData<List<WorkInfo>>>()
+
+        mockedWorkManager = Mockito.mockStatic(WorkManager::class.java)
+        mockedWorkManager!!.`when`<WorkManager> {
+            WorkManager.getInstance(any<Context>())
+        }.thenReturn(mockWorkManager)
+        whenever(mockWorkManager.getWorkInfosForUniqueWorkLiveData(DailyExportWorker.WORK_NAME))
+            .thenReturn(mockLiveData)
+
+        val result = DailyExportWorker.getStatus(mockApp)
+
+        assertSame(mockLiveData, result)
+        verify(mockWorkManager).getWorkInfosForUniqueWorkLiveData(DailyExportWorker.WORK_NAME)
+    }
+
+    // =============================================
+    // Drive sync — additional scenarios
+    // =============================================
+
+    @Test
+    fun `drive upload exception causes retry`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = false
+            )
+            val records = listOf(
+                DailyHealthRecord(
+                    date = LocalDate.now().minusDays(1).toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC")
+                )
+            )
+            val files = listOf(File(tempDir, "health_yesterday.json"))
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(false)
+            whenever(mockHealthRepo.readPeriod(any(), any(), any(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(files)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(true)
+            whenever(mockDriveRepo.uploadFile(any(), any()))
+                .thenThrow(RuntimeException("Drive upload failed"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            // Generic exception propagates to catch → retry
+            assertEquals(ListenableWorker.Result.retry(), result)
+            verify(mockDriveRepo).uploadFile(any(), any())
+        }
+    }
+
+    @Test
+    fun `drive sync with already exported and no matching files returns success`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = false
+            )
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(true)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(true)
+            // No files for yesterday — only files for other dates
+            whenever(mockLocalRepo.listExportedFiles(any())).thenReturn(
+                listOf(
+                    LocalDate.now().minusDays(3) to File(tempDir, "health_old.json")
+                )
+            )
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockLocalRepo).listExportedFiles(any())
+            // No files matched yesterday, so no upload
+            verify(mockDriveRepo, never()).uploadFile(any(), any())
+        }
+    }
+
+    @Test
+    fun `already exported syncs multiple files to drive`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = false
+            )
+            val yesterday = LocalDate.now().minusDays(1)
+            val file1 = File(tempDir, "health_1.json")
+            val file2 = File(tempDir, "health_2.json")
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(true)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(true)
+            whenever(mockLocalRepo.listExportedFiles(any())).thenReturn(
+                listOf(yesterday to file1, yesterday to file2)
+            )
+            whenever(mockDriveRepo.uploadFile(any(), any())).thenReturn("file_id")
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            // Both files should be uploaded
+            verify(mockDriveRepo, times(2)).uploadFile(any(), any())
+            verify(mockDriveRepo).uploadFile(eq(file1), any())
+            verify(mockDriveRepo).uploadFile(eq(file2), any())
+        }
+    }
+
+    @Test
+    fun `drive sync not signed in skips upload for already exported`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = false
+            )
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(true)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(false)
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockDriveRepo).isSignedIn()
+            verify(mockDriveRepo, never()).uploadFile(any(), any())
+            verify(mockLocalRepo, never()).listExportedFiles(any())
+        }
+    }
+
+    // =============================================
+    // Webhook — additional scenarios
+    // =============================================
+
+    @Test
+    fun `webhook with blank url does not send`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = false,
+                autoSendWebhook = true,
+                webhookUrl = ""  // blank URL
+            )
+            val records = listOf(
+                DailyHealthRecord(
+                    date = LocalDate.now().minusDays(1).toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC")
+                )
+            )
+            val files = listOf(File(tempDir, "health_yesterday.json"))
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(false)
+            whenever(mockHealthRepo.readPeriod(any(), any(), any(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(files)
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
+        }
+    }
+
+    @Test
+    fun `webhook exception causes retry`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = false,
+                autoSendWebhook = true,
+                webhookUrl = "https://example.com/hook"
+            )
+            val records = listOf(
+                DailyHealthRecord(
+                    date = LocalDate.now().minusDays(1).toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC")
+                )
+            )
+            val files = listOf(File(tempDir, "health_yesterday.json"))
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(false)
+            whenever(mockHealthRepo.readPeriod(any(), any(), any(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(files)
+            whenever(mockWebhookRepo.sendRecords(any(), any(), anyOrNull()))
+                .thenThrow(RuntimeException("Webhook timeout"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            // Generic exception propagates to catch → retry
+            assertEquals(ListenableWorker.Result.retry(), result)
+            verify(mockWebhookRepo).sendRecords(any(), any(), anyOrNull())
+        }
+    }
+
+    @Test
+    fun `webhook sends with auth token`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = false,
+                autoSendWebhook = true,
+                webhookUrl = "https://example.com/hook",
+                webhookAuthToken = "secret-token-123"
+            )
+            val records = listOf(
+                DailyHealthRecord(
+                    date = LocalDate.now().minusDays(1).toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC")
+                )
+            )
+            val files = listOf(File(tempDir, "health_yesterday.json"))
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(false)
+            whenever(mockHealthRepo.readPeriod(any(), any(), any(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(files)
+            whenever(mockWebhookRepo.sendRecords(any(), any(), anyOrNull()))
+                .thenReturn(WebhookResult.Success(200, "OK"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            // Verify the auth token is passed correctly
+            verify(mockWebhookRepo).sendRecords(
+                eq(config.webhookUrl),
+                eq(records),
+                eq(config.webhookAuthToken)
+            )
+        }
+    }
+
+    // =============================================
+    // Combined scenarios
+    // =============================================
+
+    @Test
+    fun `drive exception before webhook results in retry`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = true,
+                webhookUrl = "https://example.com/hook",
+                webhookAuthToken = "token"
+            )
+            val records = listOf(
+                DailyHealthRecord(
+                    date = LocalDate.now().minusDays(1).toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC")
+                )
+            )
+            val files = listOf(File(tempDir, "health_yesterday.json"))
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(false)
+            whenever(mockHealthRepo.readPeriod(any(), any(), any(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(files)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(true)
+            whenever(mockDriveRepo.uploadFile(any(), any()))
+                .thenThrow(RuntimeException("Drive error"))
+            whenever(mockWebhookRepo.sendRecords(any(), any(), anyOrNull()))
+                .thenReturn(WebhookResult.Success(200, "OK"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            // Drive exception propagates to catch → retry (webhook never reached)
+            assertEquals(ListenableWorker.Result.retry(), result)
+            verify(mockDriveRepo).uploadFile(any(), any())
+            // Webhook is not called because Drive exception interrupted the flow
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
+        }
+    }
+
+    @Test
+    fun `sync to drive exception on already exported causes retry`() {
+        runBlocking {
+            val config = ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = true,
+                autoSendWebhook = false
+            )
+            val yesterday = LocalDate.now().minusDays(1)
+            val file1 = File(tempDir, "health_yesterday.json")
+
+            whenever(mockLocalRepo.isExported(any(), any())).thenReturn(true)
+            whenever(mockDriveRepo.isSignedIn()).thenReturn(true)
+            whenever(mockLocalRepo.listExportedFiles(any())).thenReturn(
+                listOf(yesterday to file1)
+            )
+            whenever(mockDriveRepo.uploadFile(any(), any()))
+                .thenThrow(RuntimeException("Drive error"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            // syncToDrive exception propagates to catch → retry
+            assertEquals(ListenableWorker.Result.retry(), result)
+            verify(mockDriveRepo).uploadFile(any(), any())
+        }
+    }
 }

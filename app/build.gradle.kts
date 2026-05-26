@@ -164,13 +164,13 @@ tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::cla
         }
 
         // ── Per-package thresholds ──
-        // worker — DailyExportWorker (LINE ≥ 90%)
+        // worker — DailyExportWorker (LINE ≥ 95%)
         rule {
             includes = listOf("com.healthconnect.export.worker.*")
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.90".toBigDecimal()
+                minimum = "0.95".toBigDecimal()
             }
         }
         // data — DataModels, mappers, serialization (LINE ≥ 70%)
@@ -182,31 +182,40 @@ tasks.register("jacocoTestCoverageVerification", JacocoCoverageVerification::cla
                 minimum = "0.70".toBigDecimal()
             }
         }
-        // viewmodel — ExportViewModel (LINE ≥ 60%)
+        // viewmodel — ExportViewModel (LINE ≥ 65%)
         rule {
             includes = listOf("com.healthconnect.export.viewmodel.*")
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.60".toBigDecimal()
+                minimum = "0.65".toBigDecimal()
             }
         }
-        // util — LocaleManager (LINE ≥ 15%)
+        // util — LocaleManager (LINE ≥ 50%)
         rule {
             includes = listOf("com.healthconnect.export.util.*")
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.15".toBigDecimal()
+                minimum = "0.50".toBigDecimal()
             }
         }
-        // repository — HealthConnect, Drive, Webhook, Local (LINE ≥ 10%)
+        // repository — HealthConnect, Drive, Webhook, Local (LINE ≥ 35%)
         rule {
             includes = listOf("com.healthconnect.export.repository.*")
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.10".toBigDecimal()
+                minimum = "0.35".toBigDecimal()
+            }
+        }
+        // usecase — ExportDataUseCase (LINE ≥ 90%)
+        rule {
+            includes = listOf("com.healthconnect.export.usecase.*")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.90".toBigDecimal()
             }
         }
     }

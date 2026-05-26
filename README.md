@@ -60,14 +60,21 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (96 total):**
+**Test suites (295 total):**
 
 | File | Tests | Scope |
 |---|---|---|
-| `HumanReadableMapperTest` | 33 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
-| `WebhookRepositoryTest` | 13 | `isValidWebhookUrl()` URL validation |
-| `DailyExportWorkerTest` | 14 | `doWork()` (10) + `schedule()` (4) via WorkManager |
-| `DataModelsSerializationTest` | 36 | Roundtrip serialization: DailyHealthRecord, ExportConfig, enums, SpeedData |
+| `HealthConnectRepositoryTest` | 53 | Health Connect API: readDay with 8+ data types, pagination, allPages, edge cases |
+| `WebhookRepositoryTest` | 39 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation |
+| `DataModelsSerializationTest` | 33 | Roundtrip serialization: DailyHealthRecord, ExportConfig, enums, SpeedData |
+| `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers (int/float/sci), booleans, null, nested objects, arrays, escaped quotes |
+| `HumanReadableMapperTest` | 27 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
+| `DailyExportWorkerTest` | 25 | `doWork()` (success/already-exported/empty/exceptions) + `schedule()` (daily/weekly/manual/cancel) |
+| `LocalExportRepositoryTest` | 24 | File operations: save, list, cleanup, isExported, filename format |
+| `GoogleDriveRepositoryTest` | 23 | Drive sync: upload, list, download, delete, scopes, special characters |
+| `ExportDataUseCaseTest` | 15 | Export steps: permissions, reading, saving, webhook, Drive sync, health check |
+| `ExportViewModelTest` | 13 | ViewModel states: loading, export, error, permissions, schedule |
+| `LocaleManagerTest` | 12 | localeDisplayName all branches, saveLocale/getSavedLocale |
 
 ## CI/CD 🚀
 
@@ -103,7 +110,7 @@ After every push, JaCoCo verifies coverage against 9 rules. If any rule fails, t
 | **data** package | LINE | ≥ 70% |
 | **viewmodel** package | LINE | ≥ 60% |
 | **util** package | LINE | ≥ 15% |
-| **repository** package | LINE | ≥ 10% |
+| **repository** package | LINE | ≥ 35% |
 
 On push to `main`, a coverage badge is auto-committed to `badges/`.
 
@@ -219,6 +226,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Date | Highlights |
 |---|---|---|
+| [v1.2](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2) | 2026-05-27 | **+99 tests** (295 total), repo coverage ~55%, WebhookRepository rewritten with local HTTP server |
 | [v1.1](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1) | 2026-05-26 | Coverage gate, ktlint, API upgrade, webhook auth, +83 tests, russian L10n |
 | [v1.0](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.0) | — | Initial release: JSON export, Drive sync, webhook, WorkManager, Material3 UI |
 

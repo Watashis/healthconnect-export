@@ -1,6 +1,9 @@
 package com.healthconnect.export.ui
 
 import android.app.DatePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -9,12 +12,15 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Bloodtype
@@ -53,12 +59,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import org.json.JSONObject
 import com.healthconnect.export.R
 import com.healthconnect.export.data.ExportFrequency
 import com.healthconnect.export.data.HealthDataType
@@ -91,6 +106,17 @@ fun ExportScreen(
         viewModel.pendingPermissions?.let { permissions ->
             onRequestHealthPermissions(permissions)
         }
+    }
+
+    // Состояние для JSON-просмотрщика
+    var selectedJsonFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    // Диалог просмотра JSON
+    selectedJsonFile?.let { file ->
+        JsonViewerDialog(
+            file = file,
+            onDismiss = { selectedJsonFile = null }
+        )
     }
 
     Scaffold(
@@ -245,6 +271,7 @@ fun ExportScreen(
                 DateRangeCard(
                     startDate = uiState.startDate,
                     endDate = uiState.endDate,
+                    onDateRangeChange = { start, end -> viewModel.setDateRange(start, end) },
                     onStartDateChange = { viewModel.setDateRange(it, uiState.endDate) },
                     onEndDateChange = { viewModel.setDateRange(uiState.startDate, it) }
                 )
@@ -267,7 +294,10 @@ fun ExportScreen(
             // Exported Files List
             if (uiState.exportedFiles.isNotEmpty()) {
                 item(key = "exported_files_card") {
-                    ExportedFilesCard(files = uiState.exportedFiles)
+                    ExportedFilesCard(
+                        files = uiState.exportedFiles,
+                        onFileClick = { selectedJsonFile = it }
+                    )
                 }
             }
 
@@ -759,6 +789,7 @@ private fun iconForType(type: HealthDataType): ImageVector = when (type) {
 fun DateRangeCard(
     startDate: LocalDate,
     endDate: LocalDate,
+    onDateRangeChange: (LocalDate, LocalDate) -> Unit,
     onStartDateChange: (LocalDate) -> Unit,
     onEndDateChange: (LocalDate) -> Unit
 ) {
@@ -781,19 +812,13 @@ fun DateRangeCard(
                 // 7 days preset
                 if (is7dPreset) {
                     Button(
-                        onClick = {
-                            onStartDateChange(preset7dStart)
-                            onEndDateChange(preset7dEnd)
-                        }
+                        onClick = { onDateRangeChange(preset7dStart, preset7dEnd) }
                     ) {
                         Text(stringResource(R.string.days_7))
                     }
                 } else {
                     OutlinedButton(
-                        onClick = {
-                            onStartDateChange(preset7dStart)
-                            onEndDateChange(preset7dEnd)
-                        }
+                        onClick = { onDateRangeChange(preset7dStart, preset7dEnd) }
                     ) {
                         Text(stringResource(R.string.days_7))
                     }
@@ -801,19 +826,13 @@ fun DateRangeCard(
                 // 30 days preset
                 if (is30dPreset) {
                     Button(
-                        onClick = {
-                            onStartDateChange(preset30dStart)
-                            onEndDateChange(preset30dEnd)
-                        }
+                        onClick = { onDateRangeChange(preset30dStart, preset30dEnd) }
                     ) {
                         Text(stringResource(R.string.days_30))
                     }
                 } else {
                     OutlinedButton(
-                        onClick = {
-                            onStartDateChange(preset30dStart)
-                            onEndDateChange(preset30dEnd)
-                        }
+                        onClick = { onDateRangeChange(preset30dStart, preset30dEnd) }
                     ) {
                         Text(stringResource(R.string.days_30))
                     }
@@ -907,10 +926,225 @@ fun DatePickerButton(modifier: Modifier = Modifier, label: String, date: LocalDa
     }
 }
 
+// ===== JSON Viewer Dialog =====
+
+@Composable
+private fun JsonViewerDialog(file: java.io.File, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+
+    // Читаем и форматируем JSON в background корутине
+    var prettyJson by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val openErrorMsg = stringResource(R.string.json_viewer_open_error)
+
+    LaunchedEffect(file) {
+        try {
+            val content = file.readText()
+            prettyJson = JSONObject(content).toString(2)
+        } catch (e: Exception) {
+            error = openErrorMsg
+        }
+    }
+
+    // Всегда используем тёмный фон для JSON-просмотрщика (как в IDE/редакторах кода)
+    val viewerBackground = Color(0xFF1E1E1E)
+    val viewerTextColor = Color(0xFFD4D4D4)
+    val viewerHeaderBg = Color(0xFF2D2D2D)
+    val viewerDividerColor = Color(0xFF3C3C3C)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = viewerBackground
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(viewerHeaderBg)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = null,
+                        tint = Color(0xFF569CD6),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.json_viewer_title, file.name),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = viewerTextColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                    // Copy to clipboard button
+                    IconButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText(file.name, prettyJson ?: "")
+                        clipboard.setPrimaryClip(clip)
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = stringResource(R.string.json_viewer_copy),
+                            tint = Color(0xFF6A9955)
+                        )
+                    }
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.json_viewer_close),
+                            tint = viewerTextColor
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = viewerDividerColor)
+
+                // JSON content area
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                ) {
+                    when {
+                        error != null -> {
+                            Text(
+                                text = error!!,
+                                color = Color(0xFFD16969),
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                        prettyJson != null -> {
+                            val scrollState = rememberScrollState()
+                            val formattedJson = prettyJson!!
+
+                            Text(
+                                text = highlightJsonSyntax(formattedJson),
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = viewerTextColor
+                                ),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(scrollState)
+                                    .padding(12.dp)
+                            )
+                        }
+                        else -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                                color = Color(0xFF569CD6)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Простая подсветка синтаксиса JSON с помощью AnnotatedString.
+ */
+internal fun highlightJsonSyntax(json: String): androidx.compose.ui.text.AnnotatedString {
+    val keyColor = Color(0xFF569CD6)       // синий — ключи
+    val stringColor = Color(0xFF6A9955)     // зелёный — строки
+    val numberColor = Color(0xFFB5CEA8)     // салатовый — числа
+    val boolColor = Color(0xFF569CD6)       // синий — true/false
+    val nullColor = Color(0xFFD16969)       // красный — null
+    val defaultColor = Color(0xFFD4D4D4)    // серый — скобки, запятые
+
+    return buildAnnotatedString {
+        var i = 0
+        while (i < json.length) {
+            when {
+                // Строка (значение или ключ)
+                json[i] == '"' -> {
+                    val start = i
+                    i++
+                    while (i < json.length) {
+                        if (json[i] == '"') {
+                            // Считаем последовательные бэкслеши перед кавычкой
+                            var slashCount = 0
+                            var j = i - 1
+                            while (j >= 0 && json[j] == '\\') {
+                                slashCount++
+                                j--
+                            }
+                            // Кавычка экранирована только при НЕчётном числе бэкслешей
+                            if (slashCount % 2 == 0) break
+                        }
+                        i++
+                    }
+                    if (i < json.length) i++
+                    val token = json.substring(start, i)
+
+                    // Определяем, ключ это или значение
+                    // Ищем ':' после строки, игнорируя пробелы
+                    var j = i
+                    while (j < json.length && json[j].isWhitespace()) j++
+                    val isKey = j < json.length && json[j] == ':'
+
+                    withStyle(SpanStyle(color = if (isKey) keyColor else stringColor)) {
+                        append(token)
+                    }
+                }
+                // Числа (включая отрицательные и с точкой)
+                json[i] == '-' || json[i].isDigit() -> {
+                    val start = i
+                    if (json[i] == '-') i++
+                    while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] == 'e' || json[i] == 'E' || json[i] == '+' || json[i] == '-')) i++
+                    // Уточняем, что это не -1 в индексе и не другое
+                    withStyle(SpanStyle(color = numberColor)) {
+                        append(json.substring(start, i))
+                    }
+                }
+                // true / false
+                json.startsWith("true", i) -> {
+                    withStyle(SpanStyle(color = boolColor, fontWeight = FontWeight.SemiBold)) {
+                        append("true")
+                    }
+                    i += 4
+                }
+                json.startsWith("false", i) -> {
+                    withStyle(SpanStyle(color = boolColor, fontWeight = FontWeight.SemiBold)) {
+                        append("false")
+                    }
+                    i += 5
+                }
+                // null
+                json.startsWith("null", i) -> {
+                    withStyle(SpanStyle(color = nullColor, fontWeight = FontWeight.SemiBold)) {
+                        append("null")
+                    }
+                    i += 4
+                }
+                // Всё остальное (скобки, запятые, двоеточия, пробелы, переводы строк)
+                else -> {
+                    withStyle(SpanStyle(color = defaultColor)) {
+                        append(json[i].toString())
+                    }
+                    i++
+                }
+            }
+        }
+    }
+}
+
 // ===== Exported Files Card =====
 
 @Composable
-fun ExportedFilesCard(files: List<java.io.File>) {
+fun ExportedFilesCard(files: List<java.io.File>, onFileClick: (java.io.File) -> Unit = {}) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.15f)
@@ -941,6 +1175,7 @@ fun ExportedFilesCard(files: List<java.io.File>) {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable { onFileClick(file) }
                         .padding(vertical = 4.dp)
                 ) {
                     Icon(

@@ -79,7 +79,18 @@ healthconnect-export/
 │           │   ├── HumanReadableMapperTest.kt
 │           │   └── DataModelsSerializationTest.kt
 │           ├── repository/
+│           │   ├── GoogleDriveRepositoryTest.kt
+│           │   ├── HealthConnectRepositoryTest.kt
+│           │   ├── LocalExportRepositoryTest.kt
 │           │   └── WebhookRepositoryTest.kt
+│           ├── ui/
+│           │   └── HighlightJsonSyntaxTest.kt
+│           ├── usecase/
+│           │   └── ExportDataUseCaseTest.kt
+│           ├── util/
+│           │   └── LocaleManagerTest.kt
+│           ├── viewmodel/
+│           │   └── ExportViewModelTest.kt
 │           └── worker/
 │               └── DailyExportWorkerTest.kt
 ├── badges/                          # Coverage badge SVGs (auto-committed by CI)
@@ -133,14 +144,21 @@ UI → ViewModel → HealthConnectRepository (read records)
 
 ## Unit tests
 
-**Test files (96 tests total):**
+**Test files (295 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
-| `HumanReadableMapperTest.kt` | 33 | 8 mapper functions: bodyPositionToString (3), specimenSourceToString (3), mealTypeToString (3), sleepStageToString (3), measurementLocationToString (3), menstruationFlowToString (3), nutritionMealTypeToString (3), exerciseTypeToString (6) + null/unknown/edge cases |
-| `WebhookRepositoryTest.kt` | 13 | `isValidWebhookUrl()` — URL validation (valid, invalid, null, edge cases) |
-| `DailyExportWorkerTest.kt` | 14 | `doWork()` (10): success, already exported, empty, exceptions, default config / `schedule()` (4): daily, weekly, manual, cancel |
-| `DataModelsSerializationTest.kt` | 36 | Roundtrip serialization: DailyHealthRecord (5), ExportConfig (4), ExportFrequency (4), HealthDataType (2), ExportSummary (3), helper functions (3), edge cases (4), SpeedData (5), SerialName verification |
+| `HealthConnectRepositoryTest.kt` | 53 | `readDay` with 8 data types (steps, sleep, weight, calories, speed, menstruation, exercise, hydration), `readAllPages` pagination, error propagation, empty types, edge cases |
+| `WebhookRepositoryTest.kt` | 39 | `sendRecords()` via local HTTP server: success (200/201/204), error (400/403/500), network exception, Bearer auth (token/null/blank/special chars), headers, JSON body, errorstream null. `isValidWebhookUrl()` (19). |
+| `DataModelsSerializationTest.kt` | 33 | Roundtrip serialization: DailyHealthRecord (5), ExportConfig (4), ExportFrequency (4), HealthDataType (2), ExportSummary (3), helper functions (3), edge cases (4), SpeedData (5), SerialName verification |
+| `HighlightJsonSyntaxTest.kt` | 31 | JSON syntax highlighting: strings, numbers (int/float/sci), booleans, null, nested objects, arrays, escaped quotes, adjacent tokens, realistic health record |
+| `HumanReadableMapperTest.kt` | 27 | 8 mapper functions: bodyPositionToString, specimenSourceToString, mealTypeToString, sleepStageToString, measurementLocationToString, menstruationFlowToString, nutritionMealTypeToString, exerciseTypeToString |
+| `DailyExportWorkerTest.kt` | 25 | `doWork()` (14): success, already exported, empty, exceptions, config defaults / `schedule()` (4): daily, weekly, manual, cancel / webhook auth test |
+| `LocalExportRepositoryTest.kt` | 24 | File operations: getExportDirectory (3), getFilenameForDate (2), isExported (3), saveDailyRecord (3), saveRecords (2), listExportedFiles (6), cleanupOldExports (4), deleteExport (2) |
+| `GoogleDriveRepositoryTest.kt` | 23 | Google Drive sync: upload (success, delete exception, special chars), download, list (folder found/not found, error after folder), delete, sign in/out, scopes |
+| `ExportDataUseCaseTest.kt` | 15 | Export steps flow: permissions (granted/denied), health check (available/not available/installed), progress, webhook, Drive sync, complete |
+| `ExportViewModelTest.kt` | 13 | UI state: loading, export, error, permissions, schedule, data sources |
+| `LocaleManagerTest.kt` | 12 | localeDisplayName (all branches + edge cases), saveLocale, getSavedLocale |
 
 **Run tests:**
 
@@ -164,22 +182,22 @@ UI → ViewModel → HealthConnectRepository (read records)
 
 ### Global rules
 
-| Counter | Minimum | Current |
-|---|---|---|
-| LINE | ≥ 30% | ~32% |
-| BRANCH | ≥ 12% | ~13% |
-| INSTRUCTION | ≥ 15% | ~22% |
-| CLASS | ≥ 45% | ~59% |
+| Counter | Minimum |
+|---|---|
+| LINE | ≥ 30% |
+| BRANCH | ≥ 12% |
+| INSTRUCTION | ≥ 15% |
+| CLASS | ≥ 45% |
 
 ### Per-package rules
 
-| Package | Counter | Minimum | Current |
-|---|---|---|---|
-| `com.healthconnect.export.worker.*` | LINE | ≥ 90% | ~97% |
-| `com.healthconnect.export.data.*` | LINE | ≥ 70% | ~75% |
-| `com.healthconnect.export.viewmodel.*` | LINE | ≥ 60% | ~64% |
-| `com.healthconnect.export.util.*` | LINE | ≥ 15% | ~16% |
-| `com.healthconnect.export.repository.*` | LINE | ≥ 10% | ~13% |
+| Package | Counter | Minimum |
+|---|---|---|
+| `com.healthconnect.export.worker.*` | LINE | ≥ 90% |
+| `com.healthconnect.export.data.*` | LINE | ≥ 70% |
+| `com.healthconnect.export.viewmodel.*` | LINE | ≥ 60% |
+| `com.healthconnect.export.util.*` | LINE | ≥ 15% |
+| `com.healthconnect.export.repository.*` | LINE | ≥ 35% |
 
 If coverage drops below any threshold, `jacocoTestCoverageVerification` fails with a `BUILD FAILED` error listing the violated rules. In CI, this makes the `coverage` job fail (blocking gate).
 
@@ -272,8 +290,8 @@ Tag push (after build-release):
 ### Release process
 
 ```bash
-git tag v1.1
-git push origin v1.1
+git tag v1.2
+git push origin v1.2
 # CI: bump version → build → create GitHub Release
 ```
 

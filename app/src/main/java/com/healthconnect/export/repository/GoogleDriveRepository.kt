@@ -24,11 +24,14 @@ class GoogleDriveRepository(private val context: Context) {
     private val gsonFactory = GsonFactory.getDefaultInstance()
     private val httpTransport = NetHttpTransport()
 
+    /** Allows injecting a mock Drive service for testing. */
+    internal var testDrive: Drive? = null
+
     /**
      * Check if user is signed in to Google
      */
     fun isSignedIn(): Boolean {
-        return GoogleSignIn.getLastSignedInAccount(context) != null
+        return getLastAccount() != null
     }
 
     /**
@@ -53,6 +56,8 @@ class GoogleDriveRepository(private val context: Context) {
      * Get Drive service for the signed-in account
      */
     private fun getDriveService(account: GoogleSignInAccount): Drive {
+        testDrive?.let { return it }
+
         val credential = GoogleAccountCredential.usingOAuth2(
             context,
             listOf(DriveScopes.DRIVE_FILE)
@@ -93,20 +98,25 @@ class GoogleDriveRepository(private val context: Context) {
 
             val mediaContent = FileContent("application/json", localFile)
 
-            // Check if file already exists
+            // Delete all existing files with the same name before creating a new one
             val existingFiles = drive.files().list()
                 .setQ("name='${localFile.name}' and '$folderId' in parents and trashed=false")
                 .setSpaces("drive")
                 .execute()
                 .files
 
-            val driveFile = if (existingFiles.isNotEmpty()) {
-                // Update existing
-                drive.files().update(existingFiles[0].id, fileMetadata, mediaContent).execute()
+            if (existingFiles.isNotEmpty()) {
+                Log.i(TAG, "uploadFile: deleting ${existingFiles.size} existing file(s) for ${localFile.name}")
+                existingFiles.forEach { file ->
+                    drive.files().delete(file.id).execute()
+                    Log.i(TAG, "uploadFile: deleted existing file ${file.id}")
+                }
             } else {
-                // Create new
-                drive.files().create(fileMetadata, mediaContent).execute()
+                Log.i(TAG, "uploadFile: no existing file to overwrite, creating new")
             }
+
+            // Always create a new file
+            val driveFile = drive.files().create(fileMetadata, mediaContent).execute()
 
             Log.i(TAG, "uploadFile: success - ${driveFile.id}")
             driveFile.id

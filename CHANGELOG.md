@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2] — 2026-05-27
+
+### Added
+- **Tests:** `LocalExportRepositoryTest` — 24 file operation tests (save, list, cleanup, isExported)
+- **Tests:** `HealthConnectRepositoryTest` — expanded from 13 to 53 tests (readDay with Sleep/Weight/Calories/Speed/Menstruation/Exercise/Hydration, pagination edge cases)
+- **Tests:** `GoogleDriveRepositoryTest` — expanded with 4 edge cases (delete exception, list exception, scopes, special chars)
+- **Tests:** `WebhookRepositoryTest` — rewritten from 13 to 39 tests: local HTTP server via `ServerSocket(0)` replaces `mockStatic(URL)`
+- **Tests:** `ExportDataUseCaseTest` — 15 use case tests
+- **Tests:** `ExportViewModelTest` — 2 new tests
+- **Tests:** `DailyExportWorkerTest` — expanded from 14 to 25
+- **Tests:** `LocaleManagerTest` — expanded to 12 tests
+- **Tests:** Coverage improvements: `repository` ~13% → **~55%**, total 295 tests
+
+### Changed
+- **Coverage gate thresholds:** `repository` LINE minimum raised to **≥ 35%**
+- **README.md:** Updated test suites table with new files and counts
+- **AGENTS.md:** Synced test structure and file listings
+
 ## [1.1] — 2026-05-26
 
 ### Added
@@ -49,5 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.2]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2
 [1.1]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1
 [1.0]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.0
