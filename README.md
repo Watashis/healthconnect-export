@@ -268,6 +268,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Date | Highlights |
 |---|---|---|
+| [v1.3](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.3) | 2026-05-27 | Webhook payload format `{"messages": [...]}`, export progress with per-day bars, cancel button, day-by-day read |
 | [v1.2](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2) | 2026-05-27 | **+99 tests** (295 total), repo coverage ~55%, WebhookRepository rewritten with local HTTP server |
 | [v1.1](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1) | 2026-05-26 | Coverage gate, ktlint, API upgrade, webhook auth, +83 tests, russian L10n |
 | [v1.0](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.0) | — | Initial release: JSON export, Drive sync, webhook, WorkManager, Material3 UI |
