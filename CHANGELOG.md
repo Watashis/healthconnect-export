@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3] — 2026-05-27
+
+### Added
+- **Webhook:** JSON payload format changed to `{"messages": [...]}` envelope via `WebhookPayload` data class
+- **UI:** Export progress with per-day progress bar (read/save phases)
+- **UI:** Cancel export button during active export
+- **Docs:** README and AGENTS.md updated with webhook payload format specification
+
+### Changed
+- **Export:** Day-by-day reading with progress tracking instead of bulk read
+- **Viewmodel:** Export cancellation support via `Job.cancel()`, progress state fields
+- **Strings:** Added progress and cancel-related string resources (EN + RU)
+
 ## [1.2] — 2026-05-27
 
 ### Added
@@ -24,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Coverage gate thresholds:** `repository` LINE minimum raised to **≥ 35%**
 - **README.md:** Updated test suites table with new files and counts
 - **AGENTS.md:** Synced test structure and file listings
-- **Webhook:** JSON payload format changed to `{"messages": [...]}` envelope; `WebhookPayload` data class added to `WebhookRepository`
 
 ## [1.1] — 2026-05-26
 
@@ -68,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.3]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.3
 [1.2]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2
 [1.1]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1
 [1.0]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.0
