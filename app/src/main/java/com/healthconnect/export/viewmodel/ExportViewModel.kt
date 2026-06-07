@@ -39,7 +39,7 @@ data class ExportUiState(
     val scheduleStatus: ScheduleStatus = ScheduleStatus.NotScheduled,
     val selectedTypes: Set<HealthDataType> = HealthDataType.entries.toSet(),
     val startDate: LocalDate = LocalDate.now().minusDays(7),
-    val endDate: LocalDate = LocalDate.now().minusDays(1),
+    val endDate: LocalDate = LocalDate.now(),
     val frequency: ExportFrequency = ExportFrequency.DAILY,
     val autoSyncDrive: Boolean = true,
     val webhookUrl: String = "",

@@ -900,10 +900,10 @@ fun DateRangeCard(
 ) {
     val context = LocalContext.current
 
-    val preset7dStart = LocalDate.now().minusDays(7)
-    val preset7dEnd = LocalDate.now().minusDays(1)
-    val preset30dStart = LocalDate.now().minusDays(30)
-    val preset30dEnd = LocalDate.now().minusDays(1)
+    val preset7dStart = LocalDate.now().minusDays(6)
+    val preset7dEnd = LocalDate.now()
+    val preset30dStart = LocalDate.now().minusDays(29)
+    val preset30dEnd = LocalDate.now()
 
     val is7dPreset = startDate == preset7dStart && endDate == preset7dEnd
     val is30dPreset = startDate == preset30dStart && endDate == preset30dEnd
@@ -972,9 +972,9 @@ fun DatePickerButton(modifier: Modifier = Modifier, label: String, date: LocalDa
     val context = LocalContext.current
 
     // Check if date is at a preset value (defaults)
-    val isPreset = date == LocalDate.now().minusDays(7) ||
-        date == LocalDate.now().minusDays(1) ||
-        date == LocalDate.now()
+    val isPreset = date == LocalDate.now().minusDays(6) ||
+        date == LocalDate.now() ||
+        date == LocalDate.now().minusDays(29)
 
     val containerColor = if (isPreset) MaterialTheme.colorScheme.surfaceVariant
                          else MaterialTheme.colorScheme.primaryContainer
