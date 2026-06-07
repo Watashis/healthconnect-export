@@ -27,6 +27,7 @@ import org.mockito.kotlin.*
 import java.io.File
 import java.lang.reflect.Field
 import java.time.LocalDate
+import kotlin.io.path.createTempDirectory
 
 @RunWith(MockitoJUnitRunner.Silent::class)
 class DailyExportWorkerTest {
@@ -49,7 +50,7 @@ class DailyExportWorkerTest {
 
     @Before
     fun setup() {
-        tempDir = createTempDir("hce-worker-test-")
+        tempDir = createTempDirectory("hce-worker-test-").toFile()
 
         mockApp = mock()
         whenever(mockApp.applicationContext).thenReturn(mockApp)

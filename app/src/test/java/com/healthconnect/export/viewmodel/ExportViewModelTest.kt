@@ -47,6 +47,7 @@ import com.healthconnect.export.usecase.ExportDataUseCase
 import java.io.File
 import java.lang.reflect.Field
 import java.time.LocalDate
+import kotlin.io.path.createTempDirectory
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(MockitoJUnitRunner.Silent::class)
@@ -80,7 +81,7 @@ class ExportViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        tempDir = createTempDir("hce-test-")
+        tempDir = createTempDirectory("hce-test-").toFile()
 
         // Mock SharedPreferences.Editor
         mockPrefsEditor = mock()

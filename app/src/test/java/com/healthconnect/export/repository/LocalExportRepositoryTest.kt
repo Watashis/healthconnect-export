@@ -19,6 +19,7 @@ import org.mockito.junit.MockitoJUnitRunner
 import org.mockito.kotlin.*
 import java.io.File
 import java.time.LocalDate
+import kotlin.io.path.createTempDirectory
 
 @RunWith(MockitoJUnitRunner.Silent::class)
 class LocalExportRepositoryTest {
@@ -40,8 +41,8 @@ class LocalExportRepositoryTest {
 
     @Before
     fun setup() {
-        tempDir = createTempDir("hc-export-test-")
-        filesDir = createTempDir("hc-export-fallback-")
+        tempDir = createTempDirectory("hc-export-test-").toFile()
+        filesDir = createTempDirectory("hc-export-fallback-").toFile()
 
         whenever(mockContext.getExternalFilesDirs(anyOrNull())).thenReturn(arrayOf(tempDir))
         whenever(mockContext.filesDir).thenReturn(filesDir)
