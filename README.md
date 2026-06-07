@@ -5,7 +5,6 @@
 [![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.3.21-purple)](https://kotlinlang.org)
-[![Every2HoursWebhookWorker](https://img.shields.io/badge/Every2HoursWebhookWorker-100%25-brightgreen)](app/src/test/java/com/healthconnect/export/worker/Every2HoursWebhookWorkerTest.kt)
 
 > Coverage badge auto-updates on every push to `main` via CI.
 
