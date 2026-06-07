@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4] — 2026-06-07
+
+### Fixed
+- **Date range:** `endDate` теперь включает текущий день (LocalDate.now() вместо yesterday)
+- **Presets:** 7 и 30 дней корректно включают сегодняшний день (7d = today-6..today, 30d = today-29..today)
+- **DatePicker UI:** Подсветка дат в пикере обновлена под новые пресеты
+
+---
+
 ## [1.3] — 2026-05-27
 
 ### Added
@@ -80,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.4
 [1.3]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.3
 [1.2]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2
 [1.1]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1
