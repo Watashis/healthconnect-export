@@ -52,6 +52,7 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
+            enableUnitTestCoverage = true
         }
         release {
             isMinifyEnabled = false
@@ -98,7 +99,7 @@ kotlin {
 
 // JaCoCo coverage configuration
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.12"
 }
 
 // Shared JaCoCo configuration
@@ -112,17 +113,11 @@ val fileFilter =
         "android/**/*.*",
     )
 
-// Kotlin classes location (AGP 9.x+) — try multiple possible paths
-val kotlinDebugClasses =
-    fileTree("${layout.buildDirectory.get()}/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
-        exclude(fileFilter)
-    } +
-    fileTree("${layout.buildDirectory.get()}/intermediates/built_in_kotlinc/debug/classes") {
-        exclude(fileFilter)
-    } +
-    fileTree("${layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
-        exclude(fileFilter)
-    }
+    // Kotlin classes location (AGP 9.x)
+    val kotlinDebugClasses =
+        fileTree("${layout.buildDirectory.get()}/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
+            exclude(fileFilter)
+        }
 
 tasks.register("jacocoTestReport", JacocoReport::class) {
     dependsOn("testDebugUnitTest")
