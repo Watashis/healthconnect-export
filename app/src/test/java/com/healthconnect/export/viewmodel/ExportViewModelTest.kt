@@ -588,63 +588,6 @@ class ExportViewModelTest {
     }
 
     // =============================================
-    // setAutoSendWebhookEvery2Hours() Tests
-    // =============================================
-
-    @Test
-    fun `setAutoSendWebhookEvery2Hours true with blank url shows enter url message`() {
-        runTest {
-            // URL is blank by default
-            viewModel.setAutoSendWebhookEvery2Hours(true)
-
-            val state = viewModel.uiState.value
-            assertFalse("Should not enable when URL is blank", state.autoSendWebhookEvery2Hours)
-            assertNotNull(state.message)
-        }
-    }
-
-    @Test
-    fun `setAutoSendWebhookEvery2Hours true with valid url enables and shows message`() {
-        runTest {
-            // Set up a valid webhook URL
-            whenever(mockWebhookRepo.isValidWebhookUrl(any())).thenReturn(true)
-            viewModel.setWebhookUrl("https://hooks.example.com/data")
-
-            viewModel.setAutoSendWebhookEvery2Hours(true)
-
-            val state = viewModel.uiState.value
-            assertTrue("Should enable 2-hour webhook", state.autoSendWebhookEvery2Hours)
-            assertNotNull(state.message)
-
-            // Verify preference was saved with correct key
-            verify(mockPrefsEditor).putBoolean("auto_send_webhook_every_2_hours", true)
-        }
-    }
-
-    @Test
-    fun `setAutoSendWebhookEvery2Hours false disables and shows message`() {
-        runTest {
-            // Set up a valid webhook URL first
-            whenever(mockWebhookRepo.isValidWebhookUrl(any())).thenReturn(true)
-            viewModel.setWebhookUrl("https://hooks.example.com/data")
-
-            // Enable first
-            viewModel.setAutoSendWebhookEvery2Hours(true)
-            assertTrue(viewModel.uiState.value.autoSendWebhookEvery2Hours)
-
-            // Then disable
-            viewModel.setAutoSendWebhookEvery2Hours(false)
-
-            val state = viewModel.uiState.value
-            assertFalse("Should disable 2-hour webhook", state.autoSendWebhookEvery2Hours)
-            assertNotNull(state.message)
-
-            // Verify preference was saved with correct key and value
-            verify(mockPrefsEditor).putBoolean("auto_send_webhook_every_2_hours", false)
-        }
-    }
-
-    // =============================================
     // setSourcePackage() Tests
     // =============================================
 

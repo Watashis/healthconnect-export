@@ -64,10 +64,9 @@ fun ExportScreen(
         }
     }
 
-    // Состояние для JSON-просмотрщика — храним путь, а не File (File может стать невалидным при recreate)
+    // Store file path (not File) to avoid stale references on recreate
     var selectedJsonFilePath by remember { mutableStateOf<String?>(null) }
 
-    // Диалог просмотра JSON
     selectedJsonFilePath?.let { path ->
         JsonViewerDialog(
             file = File(path),
@@ -338,7 +337,7 @@ fun ExportScreen(
                                                     )
                                                 } else {
                                                     Text(
-                                                        "${uiState.progressDate}  •  стр. ${uiState.progressCurrent}",
+                                                        stringResource(R.string.export_progress_page, uiState.progressDate, uiState.progressCurrent),
                                                         style = MaterialTheme.typography.labelSmall
                                                     )
                                                     Spacer(modifier = Modifier.height(4.dp))

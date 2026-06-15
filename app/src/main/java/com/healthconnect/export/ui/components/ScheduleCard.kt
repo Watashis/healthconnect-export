@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.healthconnect.export.R
 import com.healthconnect.export.data.ExportFrequency
@@ -48,7 +49,7 @@ fun ScheduleCard(
                 Icon(Icons.Default.Schedule, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Scheduled Export",
+                    stringResource(R.string.scheduled_export),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -75,7 +76,7 @@ fun ScheduleCard(
                 is ScheduleStatus.NotScheduled -> {
                     if (frequency != ExportFrequency.MANUAL) {
                         Button(onClick = onSchedule, modifier = Modifier.fillMaxWidth()) {
-                            Text("Enable Schedule")
+                            Text(stringResource(R.string.enable_schedule))
                         }
                     }
                 }
@@ -83,7 +84,7 @@ fun ScheduleCard(
                     Text(scheduleStatus.nextRun, style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-                        Text("Disable")
+                        Text(stringResource(R.string.disable))
                     }
                 }
                 is ScheduleStatus.Running -> {
@@ -104,8 +105,8 @@ fun ScheduleCard(
                     enabled = webhookUrl.isNotBlank()
                 )
                 Text(
-                    text = if (webhookUrl.isBlank()) "Enter webhook URL first"
-                           else "Send every 2 hours",
+                    text = if (webhookUrl.isBlank()) stringResource(R.string.enter_url_first_every_2h)
+                           else stringResource(R.string.every_2_hours_webhook),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -116,7 +117,7 @@ fun ScheduleCard(
 
 @Composable
 fun exportFrequencyDisplayName(freq: ExportFrequency): String = when (freq) {
-    ExportFrequency.MANUAL -> "Manual"
-    ExportFrequency.DAILY -> "Daily"
-    ExportFrequency.WEEKLY -> "Weekly"
+    ExportFrequency.MANUAL -> stringResource(R.string.freq_manual)
+    ExportFrequency.DAILY -> stringResource(R.string.freq_daily)
+    ExportFrequency.WEEKLY -> stringResource(R.string.freq_weekly)
 }

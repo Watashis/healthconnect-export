@@ -66,6 +66,7 @@ class ExportViewModel(application: Application) : AndroidViewModel(application) 
     internal var exportScope: CoroutineScope = viewModelScope
 
     private var currentExportJob: Job? = null
+    private var currentTestWebhookJob: Job? = null
 
     private val healthRepo = HealthConnectRepository(getApplication())
     private val localRepo = LocalExportRepository(getApplication())

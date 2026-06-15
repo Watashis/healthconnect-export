@@ -2,11 +2,11 @@
 
 ## Overview
 
-**HealthConnect Export** — Android-приложение для экспорта данных Google Health Connect в JSON-формат с опциональной синхронизацией на Google Drive и отправкой на webhook.
+**HealthConnect Export** — Android-приложение для экспорта данных Google Health Connect в JSON-формат с опциональной синхронизацией на Google Drive и отправкой на webhook. Полная локализация: английский и русский языки.
 
 ### Core scenario
 
-User selects health data types and a date range, then exports to JSON files (one per day). Files can be auto-synced to Google Drive and/or sent to a webhook URL. Scheduled daily/weekly exports via WorkManager.
+User selects health data types and a date range, then exports to JSON files (one per day). Files can be auto-synced to Google Drive and/or sent to a webhook URL. Scheduled daily/weekly exports via WorkManager. All UI strings use `stringResource()` and support EN/RU locale switching.
 
 ---
 
@@ -15,7 +15,7 @@ User selects health data types and a date range, then exports to JSON files (one
 | Component | Technology |
 |---|---|
 | Language | Kotlin 2.3.21 |
-| UI | Jetpack Compose + Material3 |
+| UI | Jetpack Compose + Material3 (BOM 2026.05) |
 | Build | Gradle KTS + AGP 9.1.1 / Gradle 9.5.1 |
 | Health API | `androidx.health.connect:connect-client:1.1.0` |
 | Google Drive | `google-api-services-drive:v3-rev20240123`, `google-http-client-gson:2.1.0` |
@@ -37,13 +37,24 @@ User selects health data types and a date range, then exports to JSON files (one
 MainActivity (ComponentActivity)
   └─ ExportScreen (Compose, LazyColumn)
        └─ ExportViewModel (AndroidViewModel)
-            ├─ HealthConnectRepository — read Health Connect API
-            ├─ LocalExportRepository  — save JSON to device
-            ├─ GoogleDriveRepository  — sync with Google Drive
-            └─ WebhookRepository      — POST to webhook URL
-       ├─ DailyExportWorker (WorkManager, background)
+            ├─ ExportDataUseCase          — export workflow (Flow<ExportStep>)
+            ├─ DriveManager               — Google Drive sign-in/sync/sign-out
+            ├─ WebhookManager             — webhook URL/token/send/test
+            ├─ ScheduleManager            — schedule/cancel periodic exports
+            ├─ HealthConnectRepository    — read Health Connect API (batch via TypeHandler)
+            ├─ LocalExportRepository      — save JSON to device
+            ├─ GoogleDriveRepository      — Google Drive API calls
+            └─ WebhookRepository          — POST to webhook URL
+       ├─ DailyExportWorker (WorkManager, daily/weekly)
        └─ Every2HoursWebhookWorker (WorkManager, every 2 hours)
 ```
+
+### Key architectural decisions
+
+- **TypeHandler pattern** (HealthConnectRepository): Each health data type is registered with a `TypeHandler` that knows its record class, time selector, extraction logic, and record updater. This enables data-type-agnostic batch processing — one API call per type for the entire period, grouped by day.
+- **Manager classes** (DriveManager, WebhookManager, ScheduleManager): Extracted from ExportViewModel to keep it focused on UI state orchestration. Each manager owns its state flow and persistence.
+- **ExportDataUseCase**: Encapsulates the complete export workflow as a `Flow<ExportStep>`, making it testable and separable from ViewModel lifecycle.
+- **Separate UI components**: Each card (DriveStatus, Webhook, Schedule, DataType, DateRange, DataSource, ExportedFiles, ExportSummary) is in its own file under `ui/components/`.
 
 ### Project structure
 
@@ -55,25 +66,41 @@ healthconnect-export/
 │       ├── main/java/com/healthconnect/export/
 │       │   ├── MainActivity.kt
 │       │   ├── data/
-│       │   │   └── DataModels.kt       # DailyHealthRecord, ExportConfig, enums, mappers
+│       │   │   └── DataModels.kt       # DailyHealthRecord, ExportConfig, enums, mappers, KNOWN_SOURCE_PACKAGES
+│       │   ├── usecase/
+│       │   │   └── ExportDataUseCase.kt # Export workflow (Flow<ExportStep>)
 │       │   ├── repository/
-│       │   │   ├── HealthConnectRepository.kt
-│       │   │   ├── LocalExportRepository.kt
-│       │   │   ├── GoogleDriveRepository.kt
-│       │   │   └── WebhookRepository.kt
+│       │   │   ├── HealthConnectRepository.kt  # TypeHandler-based batch reading
+│       │   │   ├── LocalExportRepository.kt    # JSON file I/O
+│       │   │   ├── GoogleDriveRepository.kt    # Drive API (upload/list/delete)
+│       │   │   └── WebhookRepository.kt        # POST with retry
 │       │   ├── util/
 │       │   │   └── LocaleManager.kt
 │       │   ├── viewmodel/
-│       │   │   └── ExportViewModel.kt
+│       │   │   ├── ExportViewModel.kt    # UI state orchestration
+│       │   │   ├── DriveManager.kt       # Drive sign-in/sync/sign-out
+│       │   │   ├── WebhookManager.kt     # Webhook send/test
+│       │   │   └── ScheduleManager.kt    # Schedule/cancel exports
 │       │   ├── ui/
 │       │   │   ├── ExportScreen.kt
-│       │   │   └── theme/
-│       │   │       └── AppTheme.kt
+│       │   │   ├── theme/
+│       │   │   │   └── AppTheme.kt
+│       │   │   └── components/
+│       │   │       ├── DataSourceCard.kt
+│       │   │       ├── DataTypeCard.kt
+│       │   │       ├── DateRangeCard.kt
+│       │   │       ├── DriveStatusCard.kt
+│       │   │       ├── ExportedFilesCard.kt
+│       │   │       ├── ExportSummaryCard.kt
+│       │   │       ├── JsonViewerDialog.kt
+│       │   │       ├── ScheduleCard.kt
+│       │   │       └── WebhookCard.kt
 │       │   └── worker/
 │       │       ├── DailyExportWorker.kt
 │       │       └── Every2HoursWebhookWorker.kt
 │       ├── main/res/
-│       │   ├── values/strings.xml
+│       │   ├── values/strings.xml              # English (136 strings)
+│       │   ├── values-ru/strings.xml           # Russian (136 strings, полный перевод)
 │       │   ├── values/themes.xml
 │       │   └── xml/health_connect_permissions.xml
 │       └── test/java/com/healthconnect/export/
@@ -101,6 +128,8 @@ healthconnect-export/
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── gradle.properties
+├── scripts/
+│   └── locale-validator.py          # Validates translation completeness
 ├── AGENTS.md                        # This file
 └── README.md
 ```
@@ -110,10 +139,11 @@ healthconnect-export/
 ## Data flow
 
 ```
-UI → ViewModel → HealthConnectRepository (read records)
+UI → ViewModel → ExportDataUseCase (Flow<ExportStep>)
+                → HealthConnectRepository (read records, batch mode via TypeHandler)
                 → LocalExportRepository (save JSON)
-                → GoogleDriveRepository (sync, optional)
-                → WebhookRepository (POST, optional)
+                → DriveManager → GoogleDriveRepository (sync, optional)
+                → WebhookManager → WebhookRepository (POST, optional)
 
 Every2HoursWebhookWorker (every 2h)
   → HealthConnectRepository (read today)
@@ -151,12 +181,12 @@ Every2HoursWebhookWorker (every 2h)
 
 ## Unit tests
 
-**Test files (262 tests total):**
+**Test files (323 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `WebhookRepositoryTest.kt` | 39 | `sendRecords()` via local HTTP server: success (200/201/204), error (400/403/500), network exception, Bearer auth (token/null/blank/special chars), headers, JSON body, errorstream null. `isValidWebhookUrl()` (19). |
-| `DataModelsSerializationTest.kt` | 33 | Roundtrip serialization: DailyHealthRecord (5), ExportConfig (4), ExportFrequency (4), HealthDataType (2), ExportSummary (3), helper functions (3), edge cases (4), SpeedData (5), SerialName verification |
+| `DataModelsSerializationTest.kt` | 33 | Roundtrip serialization: DailyHealthRecord (5), ExportConfig (4), ExportFrequency (4), HealthDataType (2), ExportSummary (3), helper functions (3), edge cases (4), SpeedData (5), SerialName verification, sourceDisplayName |
 | `HighlightJsonSyntaxTest.kt` | 31 | JSON syntax highlighting: strings, numbers (int/float/sci), booleans, null, nested objects, arrays, escaped quotes, adjacent tokens, realistic health record |
 | `HumanReadableMapperTest.kt` | 27 | 8 mapper functions: bodyPositionToString, specimenSourceToString, mealTypeToString, sleepStageToString, measurementLocationToString, menstruationFlowToString, nutritionMealTypeToString, exerciseTypeToString |
 | `DailyExportWorkerTest.kt` | 25 | `doWork()` (14): success, already exported, empty, exceptions, config defaults / `schedule()` (4): daily, weekly, manual, cancel / webhook auth test |
@@ -164,8 +194,9 @@ Every2HoursWebhookWorker (every 2h)
 | `GoogleDriveRepositoryTest.kt` | 23 | Google Drive sync: upload (success, delete exception, special chars), download, list (folder found/not found, error after folder), delete, sign in/out, scopes |
 | `Every2HoursWebhookWorkerTest.kt` | 18 | doWork (happy path, blank URL, exceptions), schedule/cancel, constants |
 | `ExportDataUseCaseTest.kt` | 15 | Export steps flow: permissions (granted/denied), health check (available/not available/installed), progress, webhook, Drive sync, complete |
-| `ExportViewModelTest.kt` | 13 | UI state: loading, export, error, permissions, schedule, data sources |
+| `ExportViewModelTest.kt` | 13 | UI state: loading, export, error, permissions, schedule, data sources, Drive sign-in, webhook test |
 | `LocaleManagerTest.kt` | 12 | localeDisplayName (all branches + edge cases), saveLocale, getSavedLocale |
+| `DateRangeCardTest.kt` | 8 | DateRangeCard UI: presets, custom dates, picker interaction (Compose UI tests) |
 
 **Run tests:**
 
@@ -350,12 +381,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - **Language**: Kotlin, official style (`code.style=official`)
 - **UI**: Jetpack Compose + Material3
 - **Architecture**: MVVM with manual DI (no DI framework)
+- **State management**: `MutableStateFlow` + `update {}` pattern
+- **Managers**: DriveManager, WebhookManager, ScheduleManager — own their state flows and persistence, injected into ViewModel
+- **UseCase**: ExportDataUseCase — single `Flow<ExportStep>` workflow
 - **Serialization**: `kotlinx.serialization` with `@Serializable`, `@SerialName`
 - **Background**: WorkManager `CoroutineWorker`
 - **Network**: `HttpURLConnection` in `Dispatchers.IO`
 - **File format**: `health_YYYY-MM-DD.json`
-- **UI language**: English
+- **UI strings**: All via `stringResource()` — English and Russian (values-ru/)
 - **No separate Application class** — uses AndroidX Startup
+- **Data source filtering**: `filterByPreferredOrigin()` picks the best data source per type (preferred package → most records → all)
 
 ---
 
@@ -392,14 +427,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 fun getSignInOptions(): GoogleSignInOptions {
     return GoogleSignInOptions.Builder()
         .requestEmail()
-        .requestIdToken("730530422387-dveo97h089iesh4etmj74q9dn8j221f1.apps.googleusercontent.com")
+        .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID)
         .requestScopes(Scope(DriveScopes.DRIVE_FILE))
         .build()
 }
 ```
 
 **Важно:**
-- `requestIdToken()` использует **Web Client ID** — это обязательно для Google Sign-In
+- `requestIdToken()` использует **Web Client ID** из `BuildConfig.GOOGLE_CLIENT_ID` — это обязательно для Google Sign-In
 - Android Client ID с SHA-1 остаётся в Google Cloud Console для верификации приложения
 - Scope `DRIVE_FILE` даёт доступ к файлам, созданным этим приложением
 
@@ -415,6 +450,7 @@ fun getSignInOptions(): GoogleSignInOptions {
 | **Content-Type** | `application/json` |
 | **Authorization** | `Bearer <token>` (optional) |
 | **Timeout** | 15 seconds |
+| **Retry** | 1 retry after 1s on 5xx/network errors |
 | **URL validation** | Client-side (red highlight on invalid URL) |
 
 ### Payload structure
@@ -442,3 +478,13 @@ JSON body is wrapped in a `messages` envelope:
 Each `messages` element is a `DailyHealthRecord` — one per exported day. Backed by `WebhookPayload` data class in `WebhookRepository.kt`.
 
 Works with both manual and scheduled exports.
+
+---
+
+## Localization
+
+- **Languages**: English (default), Russian
+- **Locale switching**: Via Language icon in app bar → System / English / Russian
+- **Locale persistence**: Saved to SharedPreferences, Activity recreates on change
+- **Coverage**: 136 string resources in each locale, all format placeholders match
+- **Validation**: `scripts/locale-validator.py` checks for missing translations

@@ -157,10 +157,11 @@
 
     <!-- Export Progress -->
     <string name="export_progress_reading">Reading %s…</string>
+    <string name="export_progress_page">%s  •  page %d</string>
     <string name="export_progress_saving">Saving %s…</string>
 
     <!-- Every 2 Hours Webhook -->
-    <string name="every_2_hours_webhook">Send current day data every 2 hours (webhook only)</string>
+    <string name="every_2_hours_webhook">Send data every 2 hours (webhook only)</string>
     <string name="enter_url_first_every_2h">Enter a webhook URL first</string>
     <string name="every_2_hours_enabled">Every-2-hours webhook sending enabled</string>
     <string name="every_2_hours_disabled">Every-2-hours webhook sending disabled</string>
@@ -177,5 +178,5 @@
     <string name="vm_export_cancelled">Export cancelled</string>
 
     <!-- Health Connect access limitation -->
-    <string name="health_connect_access_limit">Health Connect may limit data access to the last 30 days for newly connected apps. Data before that period may not be available.</string>
+    <string name="health_connect_access_limit">Health data may be limited to the last 30 days</string>
 </resources>

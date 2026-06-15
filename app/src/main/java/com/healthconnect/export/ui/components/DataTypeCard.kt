@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.healthconnect.export.R
 import com.healthconnect.export.data.HealthDataType
@@ -64,9 +65,9 @@ private enum class DataTypeCategory(val icon: ImageVector) {
 
 @Composable
 private fun dataTypeCategoryDisplayName(category: DataTypeCategory): String = when (category) {
-    DataTypeCategory.ACTIVITY -> "Activity"
-    DataTypeCategory.VITALS -> "Vitals"
-    DataTypeCategory.BODY -> "Body"
+    DataTypeCategory.ACTIVITY -> stringResource(R.string.category_activity)
+    DataTypeCategory.VITALS -> stringResource(R.string.category_vitals)
+    DataTypeCategory.BODY -> stringResource(R.string.category_body)
 }
 
 private fun categoryForType(type: HealthDataType): DataTypeCategory = when (type) {
@@ -111,7 +112,7 @@ fun DataTypeCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "Data Types",
+                    stringResource(R.string.data_types),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -139,14 +140,14 @@ fun DataTypeCard(
                     enabled = !allSelected,
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Select All", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.select_all), style = MaterialTheme.typography.labelSmall)
                 }
                 OutlinedButton(
                     onClick = onDeselectAll,
                     enabled = !noneSelected,
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Deselect All", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.deselect_all), style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -164,7 +165,7 @@ fun DataTypeCard(
                     enabled = !allExpanded,
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Expand All", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.expand_all), style = MaterialTheme.typography.labelSmall)
                 }
                 OutlinedButton(
                     onClick = {
@@ -173,7 +174,7 @@ fun DataTypeCard(
                     enabled = !allCollapsed,
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Collapse All", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.collapse_all), style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -234,8 +235,8 @@ fun DataTypeCard(
                     )
                     Icon(
                         imageVector = Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse section"
-                                             else "Expand section",
+                        contentDescription = if (expanded) stringResource(R.string.collapse_section)
+                                             else stringResource(R.string.expand_section),
                         modifier = Modifier
                             .size(20.dp)
                             .rotate(chevronRotation),
@@ -317,26 +318,26 @@ fun DataTypeRow(
 
 @Composable
 fun healthDataTypeDisplayName(type: HealthDataType): String = when (type) {
-    HealthDataType.STEPS -> "Steps"
-    HealthDataType.HEART_RATE -> "Heart Rate"
-    HealthDataType.SLEEP -> "Sleep"
-    HealthDataType.CALORIES -> "Calories"
-    HealthDataType.DISTANCE -> "Distance"
-    HealthDataType.FLOORS_CLIMBED -> "Floors Climbed"
-    HealthDataType.ACTIVE_CALORIES -> "Active Calories"
-    HealthDataType.WEIGHT -> "Weight"
-    HealthDataType.BODY_FAT -> "Body Fat"
-    HealthDataType.BLOOD_PRESSURE -> "Blood Pressure"
-    HealthDataType.BLOOD_GLUCOSE -> "Blood Glucose"
-    HealthDataType.OXYGEN_SATURATION -> "Oxygen Saturation"
-    HealthDataType.BODY_TEMPERATURE -> "Body Temperature"
-    HealthDataType.RESPIRATORY_RATE -> "Respiratory Rate"
-    HealthDataType.HYDRATION -> "Hydration"
-    HealthDataType.RESTING_HEART_RATE -> "Resting Heart Rate"
-    HealthDataType.EXERCISE -> "Exercise"
-    HealthDataType.NUTRITION -> "Nutrition"
-    HealthDataType.SPEED -> "Speed"
-    HealthDataType.MENSTRUATION -> "Menstruation"
+    HealthDataType.STEPS -> stringResource(R.string.data_type_STEPS)
+    HealthDataType.HEART_RATE -> stringResource(R.string.data_type_HEART_RATE)
+    HealthDataType.SLEEP -> stringResource(R.string.data_type_SLEEP)
+    HealthDataType.CALORIES -> stringResource(R.string.data_type_CALORIES)
+    HealthDataType.DISTANCE -> stringResource(R.string.data_type_DISTANCE)
+    HealthDataType.FLOORS_CLIMBED -> stringResource(R.string.data_type_FLOORS_CLIMBED)
+    HealthDataType.ACTIVE_CALORIES -> stringResource(R.string.data_type_ACTIVE_CALORIES)
+    HealthDataType.WEIGHT -> stringResource(R.string.data_type_WEIGHT)
+    HealthDataType.BODY_FAT -> stringResource(R.string.data_type_BODY_FAT)
+    HealthDataType.BLOOD_PRESSURE -> stringResource(R.string.data_type_BLOOD_PRESSURE)
+    HealthDataType.BLOOD_GLUCOSE -> stringResource(R.string.data_type_BLOOD_GLUCOSE)
+    HealthDataType.OXYGEN_SATURATION -> stringResource(R.string.data_type_OXYGEN_SATURATION)
+    HealthDataType.BODY_TEMPERATURE -> stringResource(R.string.data_type_BODY_TEMPERATURE)
+    HealthDataType.RESPIRATORY_RATE -> stringResource(R.string.data_type_RESPIRATORY_RATE)
+    HealthDataType.HYDRATION -> stringResource(R.string.data_type_HYDRATION)
+    HealthDataType.RESTING_HEART_RATE -> stringResource(R.string.data_type_RESTING_HEART_RATE)
+    HealthDataType.EXERCISE -> stringResource(R.string.data_type_EXERCISE)
+    HealthDataType.NUTRITION -> stringResource(R.string.data_type_NUTRITION)
+    HealthDataType.SPEED -> stringResource(R.string.data_type_SPEED)
+    HealthDataType.MENSTRUATION -> stringResource(R.string.data_type_MENSTRUATION)
 }
 
 private fun iconForType(type: HealthDataType): ImageVector = when (type) {

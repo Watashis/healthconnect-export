@@ -8,30 +8,41 @@
 
 > Coverage badge auto-updates on every push to `main` via CI.
 
-Android app for exporting Google Health Connect data to JSON format with optional Google Drive sync and webhook delivery.
+Android app for exporting Google Health Connect data to JSON format with optional Google Drive sync and webhook delivery. **Dual language support**: English and Russian.
 
 ## Features ✨
 
 - **Daily export** — one day = one JSON file (`health_YYYY-MM-DD.json`)
-- **Local storage** — files saved on device
+- **Local storage** — files saved on device (external files dir)
 - **Scheduled export** — daily or weekly via WorkManager
 - **Google Drive sync** — optional, auto-sync to Drive
-- **Webhook delivery** — POST JSON to a URL (with optional Bearer auth)
+- **Webhook delivery** — POST JSON to a URL (with optional Bearer auth, retry on failure)
+- **Webhook test** — test connectivity with today's data directly from UI
 - **Every-2-hours webhook** — send current day's data to webhook every 2 hours (no Drive sync)
-- **20 data types** — steps, heart rate, sleep, calories, exercise, nutrition, and more
-- **Date range selection** — last 7/30 days or custom range
+- **20 data types** — steps, heart rate, sleep, calories, exercise, nutrition, speed, and more
+- **Date range selection** — last 7/30 days or custom range with date picker
+- **Data source selection** — pick preferred health data source (Google Fit, Samsung Health, etc.)
+- **Export cancellation** — cancel in-progress export with one tap
+- **Dashboard summary** — post-export stats card with steps, HR, calories, distance, sleep
+- **JSON viewer** — full-screen dark-theme viewer with syntax highlighting + copy to clipboard
+- **Theme switching** — light/dark/follow-system with animated crossfade
+- **Language switching** — English / Russian, persists across sessions
 - **Manual + automatic** — export on demand or on schedule
 
 ## Architecture 🏗️
 
 ```
 MainActivity → ExportScreen (Compose) → ExportViewModel
-  ├─ HealthConnectRepository  — read Health Connect API
-  ├─ LocalExportRepository    — save JSON files
-  ├─ GoogleDriveRepository    — sync to Drive
-  ├─ WebhookRepository        — POST to webhook
-  ├─ DailyExportWorker        — scheduled background export (daily/weekly)
-  └─ Every2HoursWebhookWorker — periodic webhook-only export (every 2 hours)
+  ├─ ExportDataUseCase         — export workflow as Flow<ExportStep>
+  ├─ DriveManager              — Google Drive sign-in/sync/sign-out
+  ├─ WebhookManager            — webhook settings/send/test
+  ├─ ScheduleManager           — schedule/cancel periodic exports
+  ├─ HealthConnectRepository   — read Health Connect API (batch via TypeHandler)
+  ├─ LocalExportRepository     — save/read/delete JSON files
+  ├─ GoogleDriveRepository     — Drive API calls (upload/list/delete)
+  ├─ WebhookRepository         — POST with retry
+  ├─ DailyExportWorker         — scheduled background export (daily/weekly)
+  └─ Every2HoursWebhookWorker  — periodic webhook-only export (every 2 hours)
 ```
 
 ## Quick start 🚀
@@ -54,7 +65,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Testing 🧪
 
 ```bash
-# Run all unit tests
+# Run all unit tests (323 tests)
 ./gradlew testDebugUnitTest
 
 # Coverage report + gate check
@@ -62,21 +73,22 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (262 total):**
+**Test suites (323 total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `WebhookRepositoryTest` | 39 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation |
-| `DataModelsSerializationTest` | 33 | Roundtrip serialization: DailyHealthRecord, ExportConfig, enums, SpeedData |
-| `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers (int/float/sci), booleans, null, nested objects, arrays, escaped quotes |
+| `DataModelsSerializationTest` | 33 | Roundtrip serialization: DailyHealthRecord, ExportConfig, enums, SpeedData, sourceDisplayName |
+| `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `HumanReadableMapperTest` | 27 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
 | `DailyExportWorkerTest` | 25 | `doWork()` (success/already-exported/empty/exceptions) + `schedule()` (daily/weekly/manual/cancel) |
 | `LocalExportRepositoryTest` | 24 | File operations: save, list, cleanup, isExported, filename format |
 | `GoogleDriveRepositoryTest` | 23 | Drive sync: upload, list, download, delete, scopes, special characters |
-| `Every2HoursWebhookWorkerTest` | 18 | doWork (happy path, blank URL, exceptions) + schedule/cancel + constants |
-| `ExportDataUseCaseTest` | 15 | Export steps: permissions, reading, saving, webhook, Drive sync, health check |
-| `ExportViewModelTest` | 13 | ViewModel states: loading, export, error, permissions, schedule |
+| `Every2HoursWebhookWorkerTest` | 18 | doWork (happy path, blank URL, exceptions) + schedule/cancel |
+| `ExportDataUseCaseTest` | 15 | Export workflow: permissions, health check, progress, webhook, Drive sync |
+| `ExportViewModelTest` | 13 | ViewModel states: loading, export, error, permissions, schedule, Drive sign-in, webhook test |
 | `LocaleManagerTest` | 12 | localeDisplayName all branches, saveLocale/getSavedLocale |
+| `DateRangeCardTest` | 8 | Compose UI tests: presets, custom dates, date picker interaction |
 
 ## CI/CD 🚀
 
@@ -152,7 +164,7 @@ git push origin v1.1
 | Тип | Client ID | Назначение |
 |---|---|---|
 | **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | Проверка SHA-1 + package name (Google Play Services) |
-| **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `requestIdToken()` в коде |
+| **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `requestIdToken()` в `BuildConfig.GOOGLE_CLIENT_ID` |
 
 ### SHA-1 fingerprints
 
@@ -189,6 +201,7 @@ After export, health data can be sent to any URL as a POST request.
 - **URL** — configurable in UI, validated client-side (red highlight on invalid)
 - **Auth** — optional Bearer token (stored in `ExportConfig`)
 - **Auto-send** — toggle in UI to send automatically after each export
+- **Test** — Test Webhook button sends today's data and shows result
 - Works with both manual and scheduled exports
 
 ### Request format
@@ -199,6 +212,7 @@ After export, health data can be sent to any URL as a POST request.
 | **Content-Type** | `application/json` |
 | **Authorization** | `Bearer <token>` (optional) |
 | **Timeout** | 15 seconds |
+| **Retry** | 1 retry after 1s on 5xx/network errors |
 
 ### Payload structure
 
@@ -223,19 +237,26 @@ The JSON body is wrapped in a `messages` envelope:
         "source_device": "test_device"
       }
     }
-    // ... more days
   ]
 }
 ```
 
-Each element in the `messages` array is a `DailyHealthRecord` — one per exported day — containing all selected health data types. The full list of supported fields includes steps, heart rate, sleep, calories, distance, floors climbed, active calories, weight, body fat, blood pressure, blood glucose, oxygen saturation, body temperature, respiratory rate, hydration, resting heart rate, exercises, nutrition, speed, and menstruation.
+Each element in the `messages` array is a `DailyHealthRecord` — one per exported day — containing all selected health data types (steps, heart rate, sleep, calories, distance, floors climbed, active calories, weight, body fat, blood pressure, blood glucose, oxygen saturation, body temperature, respiratory rate, hydration, resting heart rate, exercises, nutrition, speed, and menstruation).
 
 ## Scheduling ⏰
 
 - **Manual**, **Daily** (24h), or **Weekly** (168h)
 - **Every 2 hours** — optional webhook-only sending of current day's data (checkbox in Schedule section)
 - Default: Daily (auto-enabled at startup)
-- Uses WorkManager `PeriodicWorkRequest`
+- Uses WorkManager `PeriodicWorkRequest` with battery-not-low constraint
+
+## Localization 🌐
+
+- **Languages**: English (default), Russian
+- **Locale switching**: Via Language icon in app bar
+- **Coverage**: All 136 strings translated in `values-ru/strings.xml`
+- **Format safety**: All `%d`, `%s`, `%.1f` placeholders match between locales
+- **Persistence**: Selected locale saved in SharedPreferences
 
 ## Permissions
 
@@ -273,9 +294,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 |---|---|---|
 | [v1.5](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.5) | 2026-06-08 | Every-2-hours webhook worker, test webhook button, file sorting descending, dependency updates (Kotlin 2.3.21, Gradle 9.5.1) |
 | [v1.4](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.4) | 2026-06-07 | Date range fix: endDate includes today, 7/30 day presets corrected |
-| [v1.3](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.3) | 2026-05-27 | Webhook payload format `{"messages": [...]}`, export progress with per-day bars, cancel button, day-by-day read |
+| [v1.3](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.3) | 2026-05-27 | Webhook payload format `{\"messages\": [...]}`, export progress with per-day bars, cancel button, day-by-day read |
 | [v1.2](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.2) | 2026-05-27 | **+99 tests** (295 total), repo coverage ~55%, WebhookRepository rewritten with local HTTP server |
-| [v1.1](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1) | 2026-05-26 | Coverage gate, ktlint, API upgrade, webhook auth, +83 tests, russian L10n |
+| [v1.1](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.1) | 2026-05-26 | Coverage gate, ktlint, API upgrade, webhook auth, +83 tests, Russian L10n |
 | [v1.0](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.0) | — | Initial release: JSON export, Drive sync, webhook, WorkManager, Material3 UI |
 
 ## License 📄

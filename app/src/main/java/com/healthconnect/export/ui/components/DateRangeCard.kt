@@ -27,7 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.healthconnect.export.R
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
@@ -52,7 +54,7 @@ fun DateRangeCard(
 
     Card {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Export Period", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.export_period), style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -61,13 +63,13 @@ fun DateRangeCard(
                     Button(
                         onClick = { onDateRangeChange(preset7dStart, preset7dEnd) }
                     ) {
-                        Text("7 days")
+                        Text(stringResource(R.string.days_7))
                     }
                 } else {
                     OutlinedButton(
                         onClick = { onDateRangeChange(preset7dStart, preset7dEnd) }
                     ) {
-                        Text("7 days")
+                        Text(stringResource(R.string.days_7))
                     }
                 }
                 // 30 days preset
@@ -75,13 +77,13 @@ fun DateRangeCard(
                     Button(
                         onClick = { onDateRangeChange(preset30dStart, preset30dEnd) }
                     ) {
-                        Text("30 days")
+                        Text(stringResource(R.string.days_30))
                     }
                 } else {
                     OutlinedButton(
                         onClick = { onDateRangeChange(preset30dStart, preset30dEnd) }
                     ) {
-                        Text("30 days")
+                        Text(stringResource(R.string.days_30))
                     }
                 }
             }
@@ -94,13 +96,13 @@ fun DateRangeCard(
             ) {
                 DatePickerButton(
                     modifier = Modifier.weight(1f),
-                    label = "From",
+                    label = stringResource(R.string.from_label),
                     date = startDate,
                     onDateSelected = onStartDateChange
                 )
                 DatePickerButton(
                     modifier = Modifier.weight(1f),
-                    label = "To",
+                    label = stringResource(R.string.to_label),
                     date = endDate,
                     onDateSelected = onEndDateChange
                 )
@@ -124,7 +126,7 @@ fun DateRangeCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Health Connect limits access to the last 30 days of data",
+                        text = stringResource(R.string.health_connect_access_limit),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                     )
