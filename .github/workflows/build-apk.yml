@@ -28,7 +28,7 @@ jobs:
         distribution: 'temurin'
     - uses: android-actions/setup-android@v4
       with:
-        api-level: 37
+        packages: 'platforms;android-37'
     - uses: actions/cache@v5
       with:
         path: |
@@ -57,7 +57,7 @@ jobs:
         distribution: 'temurin'
     - uses: android-actions/setup-android@v4
       with:
-        api-level: 37
+        packages: 'platforms;android-37'
     - uses: actions/cache@v5
       with:
         path: |
@@ -91,7 +91,7 @@ jobs:
         distribution: 'temurin'
     - uses: android-actions/setup-android@v4
       with:
-        api-level: 37
+        packages: 'platforms;android-37'
     - uses: actions/cache@v5
       with:
         path: |
@@ -160,7 +160,7 @@ jobs:
         distribution: 'temurin'
     - uses: android-actions/setup-android@v4
       with:
-        api-level: 37
+        packages: 'platforms;android-37'
     - uses: actions/cache@v5
       with:
         path: |
@@ -205,7 +205,7 @@ jobs:
         distribution: 'temurin'
     - uses: android-actions/setup-android@v4
       with:
-        api-level: 37
+        packages: 'platforms;android-37'
     - uses: actions/cache@v5
       with:
         path: |
@@ -236,6 +236,7 @@ jobs:
         git config user.email 'github-actions[bot]@users.noreply.github.com'
         git add app/build.gradle.kts
         git commit -m "chore: bump version to ${VERSION_NAME} (${VERSION_CODE})"
+        git pull --rebase origin main
         git push origin HEAD:main
 
     - name: Decode keystore
